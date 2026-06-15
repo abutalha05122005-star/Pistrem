@@ -1,0 +1,6 @@
+{
+  "name": "PiStream",
+  "description": "A high-performance Netflix-like media streaming app designed for Raspberry Pi hubs, featuring local and remote streaming modes.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
