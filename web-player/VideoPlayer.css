@@ -1,0 +1,367 @@
+/**
+ * 🎨 PiStream VideoPlayer styles - Cosmic Dark Slate Theme
+ * Customized for optimized rendering performance on low-power devices like Raspberry Pi.
+ */
+
+:root {
+  --pistream-bg-darker: #070708;
+  --pistream-bg-card: #121214;
+  --pistream-accent-red: #E50914;
+  --pistream-accent-red-hover: #b80710;
+  --pistream-accent-blue: #0D47A1;
+  --pistream-accent-green: #4CAF50;
+  --pistream-text-primary: #FFFFFF;
+  --pistream-text-secondary: #AAAAAA;
+  --pistream-text-disabled: #555555;
+  --pistream-border: #222226;
+  --pistream-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+  --pistream-font-mono: "Courier New", Courier, monospace;
+}
+
+/* Base style resets and component layout */
+.pistream-player-outer-wrapper {
+  font-family: var(--pistream-font-sans);
+  background-color: var(--pistream-bg-darker);
+  border: 1px solid var(--pistream-border);
+  border-radius: 16px;
+  padding: 16px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6);
+  max-width: 1000px;
+  margin: 20px auto;
+  color: var(--pistream-text-primary);
+}
+
+.pistream-player-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.pistream-player-header .header-meta {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.pistream-player-header .badge-live {
+  background-color: var(--pistream-accent-red);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+  padding: 4px 8px;
+  border-radius: 4px;
+  letter-spacing: 1px;
+  animation: live-pulse 1.8s infinite;
+}
+
+@keyframes live-pulse {
+  0% { opacity: 1; transform: scale(1); }
+  50% { opacity: 0.7; transform: scale(0.96); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+.pistream-player-header .stream-title {
+  font-size: 16px;
+  font-weight: 700;
+  margin: 0;
+  color: var(--pistream-text-primary);
+}
+
+.telemetry-toggle-btn {
+  background: var(--pistream-bg-card);
+  border: 1px solid var(--pistream-border);
+  color: var(--pistream-text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.telemetry-toggle-btn:hover {
+  background-color: #1a1a1f;
+  color: var(--pistream-text-primary);
+  border-color: #444;
+}
+
+.telemetry-toggle-btn.active {
+  background-color: rgba(13, 71, 161, 0.15);
+  border-color: var(--pistream-accent-blue);
+  color: #42a5f5;
+}
+
+/* VideoJS Player Standard Customizations */
+.vjs-theme-cosmic.video-js {
+  background-color: #000;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+/* Center Big Play Button styles */
+.vjs-theme-cosmic .vjs-big-play-button {
+  background-color: rgba(229, 9, 20, 0.8) !important;
+  border: none !important;
+  border-radius: 50% !important;
+  width: 70px !important;
+  height: 70px !important;
+  line-height: 70px !important;
+  margin-top: -35px !important;
+  margin-left: -35px !important;
+  box-shadow: 0 0 20px rgba(229, 9, 20, 0.4);
+  transition: all 0.25s cubic-bezier(0.175, 0.885, 0.32, 1.275) !important;
+}
+
+.vjs-theme-cosmic:hover .vjs-big-play-button {
+  background-color: var(--pistream-accent-red) !important;
+  transform: scale(1.1);
+  box-shadow: 0 0 30px rgba(229, 9, 20, 0.6);
+}
+
+/* Control Bar modifications for Raspberry Pi browser viewports */
+.vjs-theme-cosmic .vjs-control-bar {
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.95), rgba(0, 0, 0, 0.6), transparent) !important;
+  height: 50px !important;
+  border-bottom-left-radius: 12px;
+  border-bottom-right-radius: 12px;
+}
+
+.vjs-theme-cosmic .vjs-play-progress {
+  background-color: var(--pistream-accent-red) !important;
+}
+
+.vjs-theme-cosmic .vjs-load-progress {
+  background: rgba(255, 255, 255, 0.25) !important;
+}
+
+.vjs-theme-cosmic .vjs-slider {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+/* Custom overlay styles */
+.player-custom-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.85);
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  z-index: 10;
+  padding: 30px;
+  text-align: center;
+}
+
+.loading-overlay {
+  background-color: rgba(0, 0, 0, 0.7);
+}
+
+.spinner {
+  width: 50px;
+  height: 50px;
+  border: 4px solid rgba(255, 255, 255, 0.1);
+  border-top: 4px solid var(--pistream-accent-red);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 20px;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.overlay-text {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 4px 0;
+}
+
+.sub-caption {
+  font-size: 12px;
+  color: var(--pistream-text-secondary);
+}
+
+/* Troubleshooting crash display */
+.crash-overlay {
+  border: 1px solid rgba(229, 9, 20, 0.3);
+}
+
+.alert-icon {
+  font-size: 40px;
+  margin-bottom: 15px;
+  animation: shake 0.5s ease-in-out;
+}
+
+@keyframes shake {
+  0%, 100% { transform: translateX(0); }
+  25% { transform: translateX(-6px); }
+  75% { transform: translateX(6px); }
+}
+
+.error-title {
+  color: var(--pistream-accent-red);
+  font-size: 18px;
+  font-weight: 700;
+  margin: 0 0 10px 0;
+}
+
+.error-body {
+  font-size: 13px;
+  color: var(--pistream-text-secondary);
+  line-height: 1.6;
+  max-width: 500px;
+  margin-bottom: 20px;
+}
+
+.retry-btn {
+  background-color: var(--pistream-accent-red);
+  color: #fff;
+  border: none;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.retry-btn:hover {
+  background-color: var(--pistream-accent-red-hover);
+}
+
+/* 🏎️ TELEMETRY INSPECTOR BOARD STYLES */
+.pistream-telemetry-panel {
+  background-color: var(--pistream-bg-card);
+  border: 1px solid var(--pistream-border);
+  border-radius: 12px;
+  margin-top: 16px;
+  padding: 16px;
+  box-shadow: inset 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.pistream-telemetry-panel .panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--pistream-border);
+  padding-bottom: 10px;
+  margin-bottom: 14px;
+}
+
+.pistream-telemetry-panel h4 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+  color: var(--pistream-text-primary);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.pistream-telemetry-panel .system-indicator {
+  background-color: rgba(255, 255, 255, 0.05);
+  font-size: 10px;
+  font-weight: 700;
+  color: var(--pistream-text-secondary);
+  padding: 2px 6px;
+  border-radius: 4px;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.metrics-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 12px;
+  margin-bottom: 14px;
+}
+
+.metric-cell {
+  background-color: rgba(255, 255, 255, 0.02);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.metric-cell .label {
+  font-size: 11px;
+  text-transform: uppercase;
+  color: var(--pistream-text-secondary);
+  letter-spacing: 0.5px;
+}
+
+.metric-cell .value {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Specialized Typography styles */
+.monospace {
+  font-family: var(--pistream-font-mono);
+  font-size: 12px !important;
+  color: #e0e0e0;
+}
+
+.scrollable {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: block;
+  max-width: 100%;
+}
+
+.font-num {
+  font-family: var(--pistream-font-mono);
+  font-weight: 700 !important;
+}
+
+.bold {
+  font-weight: 700 !important;
+}
+
+.text-accent {
+  color: #42a5f5;
+}
+
+.text-success {
+  color: var(--pistream-accent-green) !important;
+}
+
+.text-warning {
+  color: #ffca28 !important;
+}
+
+.panel-footer-guidance {
+  border-top: 1px dashed var(--pistream-border);
+  padding-top: 10px;
+  margin-top: 10px;
+  font-size: 11px;
+  color: var(--pistream-text-secondary);
+  line-height: 1.5;
+}
+
+.panel-footer-guidance code {
+  background: rgba(255, 255, 255, 0.08);
+  font-family: var(--pistream-font-mono);
+  padding: 1px 4px;
+  border-radius: 3px;
+  color: #ff7043;
+}
+
+/* Fullscreen control alignments */
+.video-js.vjs-fullscreen {
+  border-radius: 0 !important;
+}
+.video-js.vjs-fullscreen .vjs-control-bar {
+  border-radius: 0 !important;
+}

@@ -1,0 +1,24 @@
+{
+  "name": "pistream-videojs-player",
+  "version": "1.0.0",
+  "description": "High-fidelity modular React player using Video.js optimized for low-power Raspberry Pi browsers",
+  "main": "VideoPlayer.jsx",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 0"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "video.js": "^8.12.0"
+  },
+  "keywords": [
+    "react",
+    "videojs",
+    "hls",
+    "dash",
+    "raspberry-pi",
+    "streaming"
+  ],
+  "author": "PiStream",
+  "license": "MIT"
+}
