@@ -1,93 +1,80 @@
 # 🛰️ PiStream Torrent Streaming & Delivery Guide
-A complete, production-ready blueprint for deploying an ultra-fast parallel scraping, sequential downloading, and pseudo-streaming media delivery system on your Ubuntu 22.04 Linux VPS or home server.
+A complete, production-ready blueprint for deploying an ultra-fast parallel scraping, sequential downloading, and transparently encrypted media delivery system on your Raspberry Pi 4/5 or Ubuntu server.
 
 ---
 
 ## 🗺️ SYSTEM DESIGN & FLOW
 
 ```text
- 📱 MOBILE APP (React Native / Kotlin)
+ 📱 MOBILE APP (Android Jetpack Compose / React Native)
           |
           v (Searches Movie / Show)
  🛡️ API GATEWAY (POST /api/search)
           |
-  +-------+-------------------------+
-  | (Parallel Scrapes Scraper Pool)  |
-  |  - 1337x, TPB, YTS, Nyaa         | ---> Checks Redis Cache (24h)
-  |  - TorrentGalaxy, EZTV, Lime     |
-  +-------+-------------------------+
+   +-------+-------------------------+
+   | (Parallel Scrapes Scraper Pool)  |
+   |  - 1337x, TPB, YTS, Nyaa         | ---> Checks Redis Cache (24h)
+   |  - TorrentGalaxy, EZTV, Lime     |
+   +-------+-------------------------+
           | (User Selects Torrent)
           v (GET /api/stream/:magnetHash)
- 🌀 SEQUENTIAL DOWNLOAD ENGINE (WebTorrent)
+ 🌀 SEQUENTIAL DOWNLOAD ENGINE (WebTorrent) [Limited connections for Pi 4/5 RAM]
           |
-      [Starts Downloading sequentially, prioritizing start/end chunks]
+       [Starts Downloading sequentially, prioritizing start/end chunks]
           |
+          v
+ 🔒 TRANSPARENT ENCRYPTION FILESYSTEM OVERLAY (AES-256-CTR)
+          | (Decrypts on read, Encrypts on write at physical level)
           +---------> If mp4: Stream Range Requests Proxy (Express)
           |
           +---------> If mkv: Transmux on-the-fly (FFmpeg copy codec)
           |
+          +---------> If ?quality=low: Downscales on-the-fly to 360p (Data Saver on cellular)
+          |
           v
- 🎬 LIVE STREAMS IN THE HUD PLAYER
+ 🎬 LIVE STREAMS IN THE HUD PLAYER (Custom captions, speed selectors, seekbar hover previews)
 ```
 
 ---
 
 ## 🗄️ 1. SYSTEM DELIVERABLES SUMMARY
 
-*   **`/backend`**: Production Node.js + Express backend container configured with parallel search scrapers, active byte-range streams, subtitles extracts, and automated cron sweeps.
-*   **`/app-react-native`**: Fast, lightweight React Native (Expo) multiplatform application featuring progressive custom buffering indicators, background audios, and auto-reconnecting players.
-*   **`/app`**: (Root folder) Android Native Kotlin / Jetpack Compose application designed to compile stably and run on Streaming Android Emulators directly from the AI Studio playground.
+*   **`/backend`**: Production Node.js + Express backend container configured with parallel search scrapers, transparent AES-256-CTR storage monkey-patching, active byte-range streams, seekbar previews capture, and (Duration * 2) auto-deletion schedules.
+*   **`/app`**: Android Native Kotlin / Jetpack Compose application designed with a dark, cinematic Netflix interface, featuring double-tap seek controls, vertical hover seek previews, customisable subtitles and speed selectors.
+*   **`/app-react-native`**: React Native (Expo) multiplatform application alternative featuring progressive custom buffering indicators.
 
 ---
 
-## 🚀 2. DEPLOYING ON LINUX VPS (Ubuntu 22.04 LTS)
+## 🚀 2. DEPLOYING ON RASPBERRY PI 4 / 5 (ARM64 Docker setup)
 
-Follow these steps to deploy the Torrent backend on a standard cloud provider (DigitalOcean, AWS, Linode, Hetzner, etc.).
+Follow these steps to deploy the Torrent backend on a standard Raspberry Pi 4 or 5 running Raspberry Pi OS (64-bit) or Ubuntu.
 
 ### Step 2.1: Initial System Prep & Dependencies
-Login via SSH to your VPS, update repositories, install Docker, and install FFmpeg:
+Ensure your OS is 64-bit, update repositories, install Docker, and install FFmpeg:
 ```bash
 sudo apt update && sudo apt upgrade -y
 sudo apt install ffmpeg git curl -y
 ```
 
-### Step 2.2: Install Docker & Docker-Compose
-Securely install Docker on Ubuntu:
+### Step 2.2: Setup Environments
+Create your environment file:
 ```bash
-# Add Docker's official GPG key:
-sudo apt install ca-certificates gnupg -y
-sudo install -m 0755 -d /etc/apt/keyrings
-curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-sudo chmod a+r /etc/apt/keyrings/docker.gpg
-
-# Add the repository to Apt sources:
-echo \
-  "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu \
-  $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | \
-  sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
-
-sudo apt update
-sudo apt install docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin -y
-```
-
-### Step 2.3: Clone & Setup Environments
-Upload the `/backend` folder to your VPS root directory (e.g., `/home/ubuntu/pistream-backend`). Create your active environment file:
-```bash
-cd /home/ubuntu/pistream-backend
+cd backend
 cp .env.example .env
 ```
-Open `.env` using nano (`nano .env`) and set your customized ports or volume variables:
+Open `.env` using nano (`nano .env`) and set your customized variables:
 ```env
 PORT=3000
 TORRENT_PORT=3000
 NODE_ENV=production
 TEMP_DIR=/tmp/streamcache
-MAX_CACHE_SIZE=52428800000 # 50 GB Limit
+MAX_CACHE_SIZE=5368709120 # 5 GB Limit
 ENCRYPTION_KEY=SuperSecureStreamingEncryptionKey123
+TMDB_API_KEY=your_optional_tmdb_key_here
 ```
 
-### Step 2.4: Spin Up with Docker-Compose
-To build the server container and spin up Redis in daemonized background modes, run:
+### Step 2.3: Build & Spin Up with Docker-Compose
+To build the server container and spin up Redis in daemonized background modes optimized for ARM64:
 ```bash
 sudo docker compose up -d --build
 ```
@@ -100,62 +87,30 @@ sudo docker compose logs -f backend
 
 ---
 
-## 📱 3. RUNNING AND BUILDING THE MOBILE APP (React Native + Expo)
+## 🔒 3. CORE SECURITY & TEMPORARY STORAGE ENFORCEMENTS
 
-You can build and test the mobile application on physical Android/iOS devices or simulators.
+### 🛡️ Transparent AES-256-CTR Encryption at Rest
+All files stored inside `/tmp/streamcache` (downloaded video segments, captured thumbnails, subtitles) are automatically encrypted on write and decrypted on read. 
+- Utilizes deterministic AES-256-CTR stream ciphers.
+- Offset seeking aligns block boundaries `Math.floor(position / 16)` dynamically, allowing instant, random-access byte-range seeking for players with **zero decryption overhead**.
+- Files remain 100% garbage on physical memory nodes should SD/SSD storage gets extracted from Raspberry Pi terminals.
 
-### Step 3.1: Install Node.js (Local Developer Environment)
-Make sure you have Node 18 or 20 installed locally on your development laptop.
-
-### Step 3.2: Initialize the App Project
-Navigate to your local copy of `/app-react-native` and install Expo dependencies:
-```bash
-cd app-react-native
-npm install
-```
-
-### Step 3.3: Link Server URL
-Open `App.js` and change the `BACKEND_URL` constant:
-```javascript
-const BACKEND_URL = 'http://YOUR_VPS_PUBLIC_IP:3000';
-```
-
-### Step 3.4: Launch the Expo Packager
-Start the local server package runner:
-```bash
-npx expo start
-```
-*   **Android Devices**: Download the **Expo Go** app from the Google Play Store, then scan the QR code displayed in your terminal.
-*   **iOS Devices**: Download the **Expo Go** app from the App Store, open your camera app, scan the terminal QR code, and allow the bundle to assemble.
+### ⏱️ Dynamic (Duration * 2) Auto-Deletion Policies
+Rather than rigid timer deletes, the system enforces a video duration-based garbage collector:
+1.  **Stop-Stream Evaluation**: The instant a stream session active watcher client count reaches `0`, the server queries `ffmpeg.ffprobe` to determine the video's running duration in minutes.
+2.  **Schedule Table Persistence**: The server schedules eviction for `(duration * 2)` minutes from the current stop time, writing this state to a local SQLite database (`pistream.db`).
+3.  **Active Reset**: If the user re-initiates the exact same stream within the deletion countdown window, the timer resets, removing the database timer entry until streaming ceases again.
+4.  **1-Minute Expiration Sweeper**: A background service checks the SQLite record every minute. Upon expiration, the daemon securely wipes the video files, VTT subtitle tracks, and thumbnail frame cache.
+5.  **Abandoned Download Sweeper**: If a torrent starts downloading but stays idle (no active streams) for 10 minutes (e.g., zero peer stalling), it is automatically cancelled and deleted from the disk cache.
 
 ---
 
-## 🔒 4. CORE ENGINE SPECS & SECURITY ENFORCEMENTS
+## 🛠️ 4. MOBILE CINEMATIC CONTROLS OVERVIEW
 
-### ⚔️ Multi-Source Scraper Fallback Matrix
-The `/backend/scrapers.js` module contains individual search classes equipped with **both** Cheerio DOM tree parser routes AND direct Regex evaluation blocks. If a source's layout changes, the alternative parser takes over instantly without crashing.
-```text
-Order of Searches:
-1. YTS.mx (Movies Only) ────> Fallbacks to HTML crawl
-2. apibay.org ──────────────> Fallbacks to pirateproxy.live HTML parsing
-3. 1337x.to scrape ─────────> Fallbacks to backup Regex parser
-4. Nyaa.si ─────────────────> Fallbacks Sukebei
-5. TorrentGalaxy / EZTV ────> TV Show / Genre-specific routines
-6. DHT crawler ─────────────> Ultimate fallback to synthetic magnet generator
-```
-
-### 🧹 Automatic Storage Cleanups (Zero-Trace Policy & 5GB Quotas)
-Temp data remains on disk during active playback only, and local cache is carefully maintained within a strict 5GB boundary to defend VPS resources.
-1.  **5GB Enforced Storage Limit**: The system monitors physical space of `/tmp/streamcache` using a dedicated background service (`/backend/cacheService.js`). If total size breaches 5GB, it triggers Least Recently Used (LRU) evictions down to 80% capacity (4GB), deleting older inactive torrent files first. If active files must be evicted, their Torrent threads/streams are properly destroyed prior to disk erasure.
-2.  **Proactive Enforcements**: In addition to periodic 2-minute interval sweeps, the server proactively forces a cache-limit evaluation immediately before starting any new stream session.
-3.  **15-Minute Sweep**: Exactly 15 minutes after the user stops requesting range blocks, the torrent session is closed, the file buffers are wiped, and track nodes are cleared.
-4.  **10-Minute Stalled-Download Sweep**: If someone requests a torrent with 0 seeders and it hangs without completing a block for 10 minutes, the client cancels the download and purges files to prevent VPS disk fill-ups.
-5.  **Encrypted Erasure**: Before deleting files, the first/last sectors are fully zeroed out and overwritten with high-entropy cryptographic junk to prevent data recovery.
-
----
-
-## 🛠️ 5. TROUBLESHOOTING & MAINTENANCE
-
-*   **Disk Full Errors**: The system monitors its volume limit using `MAX_CACHE_SIZE`. Check container storage using `docker df`.
-*   **Seeking Stalls**: When seeking forward past the buffered limit, the video may pause while WebTorrent requests the matching piece sequentially. If it exceeds 30 seconds, it sends a **503 Gateway Retry**, allowing the video player to try again without crashing.
-*   **MKV Transmuxing CPU overhead**: MKV transmuxing uses `videoCodec('copy')` on FFmpeg, copying raw H.264 streams directly into MP4 containers with zero encoding overhead (typically <2% CPU utilization on single cores).
+The upgraded Native Jetpack Compose screen packs premium Netflix‑parity interactions:
+*   **Edge Double-Taps**: Double-tap on the left side of the screen rewinds exactly 10s; double-tap on the right side fast-forwards 10s.
+*   **Adaptive Seek Thumbnails**: Sliding the seek bar triggers a hovering card above showing custom FFmpeg screenshot snapshots generated on-the-fly at that target second.
+*   **Media Downscaler**: Allows switching on-the-fly between direct range streaming and a low-bitrate data economy stream encoded via high-efficiency `libx264` ultrafast profile to minimize mobile data utilization.
+*   **Caption Styling Panel**: Displays custom captions from VTT files parsed in the background, allowing customization of size and color overlays.
+*   **Picture-in-Picture**: Supports native picture-in-picture modes on Android Oreo (API 26) or higher.
+*   **Network Exponential Backoff**: Recovers gracefully when losing network signal (Wi-Fi/4G cell drops) with recovery banners.

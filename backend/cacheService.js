@@ -1,17 +1,20 @@
 /**
  * 🧹 PiStream Cache Manager & Garbage Collection Service
  * Manages the /tmp/streamcache directory, monitoring total space and eviction policies
- * to keep total disk usage under a configurable 5GB limit with automated sweeps.
+ * to keep total disk usage under a configurable 5GB limit, and queries SQLite stream timers
+ * every minute to enforce (duration * 2) auto-deletion schedules on the Raspberry Pi.
  */
 
 const fs = require('fs');
 const path = require('path');
 const { activeStreams, cleanupStreamingSession } = require('./streamEngine');
+const { StreamTimers } = require('./db');
 
 const TEMP_DIR = process.env.TEMP_DIR || '/tmp/streamcache';
 // 5 GB Limit, fall back to environment variable if configured (default to 5GB in bytes)
 const CACHE_LIMIT_BYTES = parseInt(process.env.MAX_CACHE_SIZE, 10) || 5 * 1024 * 1024 * 1024; 
-const CHECK_INTERVAL_MS = 2 * 60 * 1000; // Check every 2 minutes
+const CHECK_INTERVAL_MS = 2 * 60 * 1000; // Check storage every 2 minutes
+const TIMER_INTERVAL_MS = 60 * 1000; // Check expired SQLite timers every 1 minute
 
 /**
  * Calculate directory size recursively and get modification stats
@@ -166,20 +169,61 @@ function enforceCacheLimit() {
 }
 
 /**
+ * Sweeps and auto-deletes expired video streams based on their (Duration * 2) SQLite database timers
+ */
+async function checkExpiredStreamTimers() {
+  try {
+    const activeTimers = await StreamTimers.getActiveTimers();
+    const now = Date.now();
+
+    for (const timer of activeTimers) {
+      if (now >= timer.endsAt) {
+        console.log(`⏰ [Expired Timer Triggered] Session ${timer.id} reached its limits. Wiping cache files: ${timer.torrentPath}...`);
+        
+        // Wipe active running session
+        cleanupStreamingSession(timer.id, 'SQLite expiration schedule');
+        
+        // Mark as expired in DB
+        await StreamTimers.setExpired(timer.id);
+        
+        // Ensure files are wiped from disk permanently
+        if (fs.existsSync(timer.torrentPath)) {
+          deleteFolderRecursive(timer.torrentPath);
+        }
+        
+        // Wipe secondary associated thumbnail directories for this session
+        const thumbDir = path.join(TEMP_DIR, `thumbs-${timer.id}`);
+        if (fs.existsSync(thumbDir)) {
+          deleteFolderRecursive(thumbDir);
+        }
+      }
+    }
+  } catch (err) {
+    console.error('❌ [Cache Service Timer Check Error]:', err.message);
+  }
+}
+
+/**
  * Initializes background interval sweeps
  */
 function startCacheService() {
   console.log(`🛸 Initializing PiStream Cache Service...`);
   console.log(`📊 Target Storage limit: ${(CACHE_LIMIT_BYTES / (1024 * 1024 * 1024)).toFixed(2)} GB`);
-  console.log(`⏱️ Sweep interval: Every ${CHECK_INTERVAL_MS / 1000} seconds`);
+  console.log(`⏱️ Sweep intervals: Space Sweep=${CHECK_INTERVAL_MS / 1000}s, SQLite Timers Sweep=${TIMER_INTERVAL_MS / 1000}s`);
 
   // Run initial enforcement check
   enforceCacheLimit();
+  checkExpiredStreamTimers();
 
-  // Schedule periodic checks
+  // Schedule storage limits sweeps
   setInterval(() => {
     enforceCacheLimit();
   }, CHECK_INTERVAL_MS);
+
+  // Schedule (Duration * 2) auto-deletion timer checks from SQLite db
+  setInterval(() => {
+    checkExpiredStreamTimers();
+  }, TIMER_INTERVAL_MS);
 }
 
 module.exports = {
