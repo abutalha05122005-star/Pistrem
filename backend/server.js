@@ -340,6 +340,54 @@ app.delete('/api/stop/:id', (req, res) => {
 });
 
 /**
+ * 🛰️ GET /api/version
+ * Performs version checking against GitHub Releases or env config
+ */
+app.get('/api/version', async (req, res) => {
+  const owner = process.env.GITHUB_OWNER || 'abutalha0512';
+  const repo = process.env.GITHUB_REPO || 'pistream';
+  
+  try {
+    const response = await fetch(`https://api.github.com/repos/${owner}/${repo}/releases/latest`, {
+      headers: {
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'PiStream-Updater'
+      }
+    });
+    
+    if (!response.ok) {
+      throw new Error(`GitHub API returned status ${response.status}`);
+    }
+    
+    const release = await response.json();
+    const apkAsset = release.assets.find(asset => asset.name.endsWith('.apk'));
+    
+    res.json({
+      success: true,
+      latestVersion: release.tag_name.replace(/^v/, ''),
+      releaseNotes: release.body,
+      publishedAt: release.published_at,
+      apkUrl: apkAsset ? apkAsset.browser_download_url : null,
+      assets: release.assets.map(a => ({
+        name: a.name,
+        size: a.size,
+        downloadUrl: a.browser_download_url
+      }))
+    });
+  } catch (err) {
+    console.error('Error checking latest version from GitHub:', err.message);
+    res.json({
+      success: false,
+      error: 'Failed to retrieve version info from GitHub',
+      message: err.message,
+      latestVersion: '1.0.0',
+      apkUrl: null,
+      assets: []
+    });
+  }
+});
+
+/**
  * 📊 GET /api/status
  */
 app.get('/api/status', (req, res) => {

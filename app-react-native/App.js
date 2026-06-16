@@ -20,9 +20,25 @@ import {
   Alert
 } from 'react-native';
 import { Video, Audio } from 'expo-av';
-import { Play, Search, Film, CircleDot, Info, Volume2, ShieldAlert, ArrowLeft, RefreshCw } from 'lucide-react-native';
+import { 
+  Play, 
+  Search, 
+  Film, 
+  CircleDot, 
+  Info, 
+  Volume2, 
+  ShieldAlert, 
+  ArrowLeft, 
+  RefreshCw, 
+  Settings,
+  AlertTriangle,
+  ArrowUpCircle
+} from 'lucide-react-native';
 
-const BACKEND_URL = 'http://YOUR_VPS_IP:3000'; // Default server connection
+import { getBackendUrl } from './src/config.js';
+import { searchTorrents, testConnection } from './src/services/api.js';
+import { checkForAppUpdates, performAppUpgrade, CLIENT_VERSION } from './src/services/updateChecker.js';
+import SettingsScreen from './src/screens/SettingsScreen.js';
 
 export default function App() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -34,7 +50,50 @@ export default function App() {
   const [playbackStatus, setPlaybackStatus] = useState({});
   const [isReconnecting, setIsReconnecting] = useState(false);
   
+  // Settings & Connection
+  const [showSettings, setShowSettings] = useState(false);
+  const [currentBackendUrl, setCurrentBackendUrl] = useState('');
+  const [isServerOnline, setIsServerOnline] = useState(true);
+  const [isCheckingConnection, setIsCheckingConnection] = useState(false);
+  
+  // Versions
+  const [updateAvailable, setUpdateAvailable] = useState(null);
+  
   const videoRef = useRef(null);
+
+  // Load Settings and Check Connection Status on Start
+  const refreshServerState = async () => {
+    setIsCheckingConnection(true);
+    try {
+      const url = await getBackendUrl();
+      setCurrentBackendUrl(url);
+      const online = await testConnection(url);
+      setIsServerOnline(online);
+    } catch (e) {
+      setIsServerOnline(false);
+    } finally {
+      setIsCheckingConnection(false);
+    }
+  };
+
+  useEffect(() => {
+    refreshServerState();
+    
+    // Background Update Check on Startup
+    async function triggerUpdateCheck() {
+      try {
+        const info = await checkForAppUpdates();
+        if (info && info.hasUpdate) {
+          setUpdateAvailable(info);
+        }
+      } catch (e) {}
+    }
+    triggerUpdateCheck();
+
+    // Repeated update checker runs every 30 minutes
+    const updateTimer = setInterval(triggerUpdateCheck, 30 * 60 * 1000);
+    return () => clearInterval(updateTimer);
+  }, []);
 
   // Configure Background Audio Playback Session
   useEffect(() => {
@@ -58,24 +117,18 @@ export default function App() {
     if (!term || term.trim() === '') return;
     setIsSearching(true);
     try {
-      const response = await fetch(`${BACKEND_URL}/api/search`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          query: term,
-          type: activeCategory === 'all' ? 'all' : activeCategory
-        })
-      });
-      const data = await response.json();
+      const data = await searchTorrents(term, activeCategory === 'all' ? 'all' : activeCategory);
       if (data.success) {
         setSearchResults(data.results);
+        setIsServerOnline(true);
       } else {
         setSearchResults([]);
       }
     } catch (e) {
+      setIsServerOnline(false);
       Alert.alert(
-        'Connection Failed', 
-        'Could not stream to your torrent server. Ensure your backend URL is set correctly in App.js.'
+        'Server Unreachable', 
+        'Could not stream to your torrent server. Open settings to check your server connection and IP address.'
       );
       setSearchResults([]);
     } finally {
@@ -86,7 +139,7 @@ export default function App() {
   const handleStartStream = (torrent) => {
     // Encode magnet link to base64 safely for HTTP parameter passing
     const base64Magnet = btoa(torrent.magnet).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    const streamEndpoint = `${BACKEND_URL}/api/stream/${base64Magnet}`;
+    const streamEndpoint = `${currentBackendUrl}/api/stream/${base64Magnet}`;
 
     setPlayingTorrent(torrent);
     setActiveStreamUrl(streamEndpoint);
@@ -106,8 +159,8 @@ export default function App() {
         console.log(`[Player Reconnect] Session reconnect attempt: ${attempts}`);
         
         try {
-          const check = await fetch(`${BACKEND_URL}/api/status`);
-          if (check.ok) {
+          const check = await testConnection(`${currentBackendUrl}`);
+          if (check) {
             clearInterval(retryInterval);
             videoRef.current?.loadAsync({ uri: activeStreamUrl }, {}, true);
             videoRef.current?.setStatusAsync({ shouldPlay: true });
@@ -137,8 +190,16 @@ export default function App() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0A0A0A" />
       
-      {/* 🎬 FULL SCREEN PLAYER GATE */}
-      {activeStreamUrl ? (
+      {/* ⚙️ SETTINGS VIEW POPUP */}
+      {showSettings ? (
+        <SettingsScreen 
+          onClose={() => {
+            setShowSettings(false);
+            refreshServerState();
+          }} 
+        />
+      ) : activeStreamUrl ? (
+        /* 🎬 FULL SCREEN PLAYER GATE */
         <View style={styles.fullscreenPlayerContainer}>
           <Video
             ref={videoRef}
@@ -206,12 +267,59 @@ export default function App() {
         /* 🔍 MAIN SEARCH PAGE */
         <View style={{ flex: 1 }}>
           
-          {/* Brand Row */}
+          {/* Brand Row with Gear Button */}
           <View style={styles.brandRow}>
-            <Text style={styles.brandTextPrefix}>PI</Text>
-            <Text style={styles.brandTextSuffix}>STREAM</Text>
-            <Text style={styles.badgeBeta}>TORRENT</Text>
+            <TouchableOpacity 
+              style={styles.settingsToggleButton}
+              onPress={() => setShowSettings(true)}
+            >
+              <Settings color="#FFFFFF" size={20} />
+            </TouchableOpacity>
+
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              <Text style={styles.brandTextPrefix}>PI</Text>
+              <Text style={styles.brandTextSuffix}>STREAM</Text>
+              <Text style={styles.badgeBeta}>TORRENT</Text>
+            </View>
+
+            <TouchableOpacity 
+              style={styles.reloadButton}
+              onPress={refreshServerState}
+              disabled={isCheckingConnection}
+            >
+              {isCheckingConnection ? (
+                <ActivityIndicator size="small" color="#E50914" />
+              ) : (
+                <RefreshCw color={isServerOnline ? '#4FAF50' : '#E50914'} size={18} />
+              )}
+            </TouchableOpacity>
           </View>
+
+          {/* 🔴 OFFLINE WARNING BANNER */}
+          {!isServerOnline && (
+            <TouchableOpacity 
+              style={styles.warningBanner} 
+              onPress={() => setShowSettings(true)}
+            >
+              <AlertTriangle color="#FFFFFF" size={16} />
+              <Text style={styles.warningBannerText}>
+                Pi Server Offline ({currentBackendUrl}). Tap to Configure IP.
+              </Text>
+            </TouchableOpacity>
+          )}
+
+          {/* 🚀 UPDATE NOTIFICATION BANNER */}
+          {updateAvailable && (
+            <TouchableOpacity 
+              style={styles.updateBanner} 
+              onPress={() => performAppUpgrade(updateAvailable)}
+            >
+              <ArrowUpCircle color="#FFFFFF" size={16} />
+              <Text style={styles.updateBannerText}>
+                New version available: v{updateAvailable.latestVersion}. Tap to upgrade!
+              </Text>
+            </TouchableOpacity>
+          )}
 
           {/* Elegant Search Enclosure */}
           <View style={styles.searchContainer}>
@@ -270,9 +378,24 @@ export default function App() {
                 <View style={styles.emptyContainer}>
                   <Film color="#757575" size={48} />
                   <Text style={styles.emptyHeading}>Live Stream Torrent Search</Text>
-                  <Text style={styles.emptySubtitle}>
-                    Enter your desired video query. Magnet links are resolved and loaded directly into sequence on the VPS servers for instant previews.
-                  </Text>
+                  
+                  {!isServerOnline ? (
+                    <View style={styles.offlineGuide}>
+                      <Text style={styles.offlineGuideText}>
+                        Your PiStream server at {currentBackendUrl} appears to be offline. Please connect to the same Wi-Fi network and launch settings to auto-discover your Pi.
+                      </Text>
+                      <TouchableOpacity 
+                        style={styles.offlineActionBtn}
+                        onPress={() => setShowSettings(true)}
+                      >
+                        <Text style={styles.offlineActionBtnText}>⚙️ Setup Connection IP</Text>
+                      </TouchableOpacity>
+                    </View>
+                  ) : (
+                    <Text style={styles.emptySubtitle}>
+                      Enter your desired video query. Magnet links are resolved and loaded directly into sequence on the VPS/Pi servers for instant previews.
+                    </Text>
+                  )}
                 </View>
               }
               renderItem={({ item }) => (
@@ -336,18 +459,19 @@ const styles = StyleSheet.create({
   brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
     marginVertical: 18
   },
   brandTextPrefix: {
     color: '#FFFFFF',
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
     letterSpacing: 2
   },
   brandTextSuffix: {
     color: '#E50914',
-    fontSize: 24,
+    fontSize: 22,
     fontWeight: '900',
     letterSpacing: 2
   },
@@ -360,6 +484,58 @@ const styles = StyleSheet.create({
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 4
+  },
+  settingsToggleButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E1E1E',
+    borderWidth: 1,
+    borderColor: '#333'
+  },
+  reloadButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#1E1E1E',
+    borderWidth: 1,
+    borderColor: '#333'
+  },
+  warningBanner: {
+    backgroundColor: '#E50914',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 10
+  },
+  warningBannerText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center'
+  },
+  updateBanner: {
+    backgroundColor: '#2196F3',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginBottom: 10
+  },
+  updateBannerText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '700',
+    textAlign: 'center'
   },
   searchContainer: {
     flexDirection: 'row',
@@ -445,6 +621,30 @@ const styles = StyleSheet.create({
     fontSize: 13,
     textAlign: 'center',
     lineHeight: 20
+  },
+  offlineGuide: {
+    alignItems: 'center',
+    marginTop: 10
+  },
+  offlineGuideText: {
+    color: '#999',
+    fontSize: 13,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 16
+  },
+  offlineActionBtn: {
+    backgroundColor: '#2D2D2D',
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#444'
+  },
+  offlineActionBtnText: {
+    color: '#FFFF',
+    fontWeight: '700',
+    fontSize: 13
   },
   resultCard: {
     backgroundColor: '#161616',
