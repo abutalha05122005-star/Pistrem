@@ -132,3 +132,10 @@ export async function stopStreamSession(id) {
 export async function getServerStatus() {
   return fetchWithRetry('/api/status', { method: 'GET', timeout: 4000 });
 }
+
+/**
+ * Retrieves the real-time Raspberry Pi hardware utilization stats
+ */
+export async function getSystemStats() {
+  return fetchWithRetry('/api/system/stats', { method: 'GET', timeout: 4000 });
+}

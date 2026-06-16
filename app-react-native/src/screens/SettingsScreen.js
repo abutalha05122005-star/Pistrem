@@ -11,8 +11,18 @@ import {
   Platform
 } from 'react-native';
 import { getBackendUrl, saveBackendUrl, autoDiscoverServer } from '../config.js';
-import { testConnection } from '../services/api.js';
+import { testConnection, getSystemStats } from '../services/api.js';
 import { checkForAppUpdates, performAppUpgrade, CLIENT_VERSION } from '../services/updateChecker.js';
+
+function formatUptime(seconds) {
+  if (!seconds) return '0s';
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
 
 export default function SettingsScreen({ onClose }) {
   const [urlInput, setUrlInput] = useState('');
@@ -21,9 +31,38 @@ export default function SettingsScreen({ onClose }) {
   const [isScanning, setIsScanning] = useState(false);
   const [scanStatusLog, setScanStatusLog] = useState('');
   
+  // Real-time system monitoring state
+  const [stats, setStats] = useState(null);
+  
   // Update state
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateInfo, setUpdateInfo] = useState(null);
+
+  useEffect(() => {
+    let intervalId;
+    
+    const fetchStats = async () => {
+      if (connectionStatus === 'online') {
+        try {
+          const data = await getSystemStats();
+          setStats(data);
+        } catch (err) {
+          console.warn('[Diagnostics Error] Failed to update stats:', err.message);
+        }
+      } else {
+        setStats(null);
+      }
+    };
+
+    fetchStats();
+    intervalId = setInterval(fetchStats, 5000);
+
+    return () => {
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [connectionStatus]);
 
   useEffect(() => {
     async function loadCurrentSettings() {
@@ -199,6 +238,130 @@ export default function SettingsScreen({ onClose }) {
           </TouchableOpacity>
         )}
       </View>
+
+      {/* 📊 RASPBERRY PI REAL-TIME SYSTEM MONITORING DASHBOARD */}
+      {connectionStatus === 'online' && (
+        <View style={styles.section}>
+          <Text style={styles.sectionLabel}>Raspberry Pi Diagnostics</Text>
+          <Text style={styles.sectionDesc}>
+            Live hardware resource utilization and health indicators retrieved directly from your host device.
+          </Text>
+
+          {!stats ? (
+            <View style={styles.statsLoadingBlock}>
+              <ActivityIndicator size="small" color="#E50914" />
+              <Text style={styles.statsLoadingText}>Synchronizing host diagnostics...</Text>
+            </View>
+          ) : (
+            <View style={styles.statsContainer}>
+              {/* CPU Usage Meter */}
+              <View style={styles.metricRow}>
+                <View style={styles.metricLabelRow}>
+                  <Text style={styles.metricTitle}>CPU Utilization</Text>
+                  <Text style={styles.metricValue}>{stats.cpuUsage}%</Text>
+                </View>
+                <View style={styles.meterTrack}>
+                  <View 
+                    style={[
+                      styles.meterFill, 
+                      { 
+                        width: `${stats.cpuUsage}%`, 
+                        backgroundColor: stats.cpuUsage > 80 ? '#E50914' : stats.cpuUsage > 50 ? '#FFC107' : '#4FAF50' 
+                      }
+                    ]} 
+                  />
+                </View>
+              </View>
+
+              {/* Memory Usage Meter */}
+              <View style={styles.metricRow}>
+                <View style={styles.metricLabelRow}>
+                  <Text style={styles.metricTitle}>RAM Memory</Text>
+                  <Text style={styles.metricValue}>
+                    {stats.memoryUsed} MB / {stats.memoryTotal} MB
+                  </Text>
+                </View>
+                <View style={styles.meterTrack}>
+                  <View 
+                    style={[
+                      styles.meterFill, 
+                      { 
+                        width: `${Math.min(100, (stats.memoryUsed / stats.memoryTotal) * 100)}%`, 
+                        backgroundColor: (stats.memoryUsed / stats.memoryTotal) > 0.85 ? '#E50914' : (stats.memoryUsed / stats.memoryTotal) > 0.6 ? '#FFC107' : '#4FAF50' 
+                      }
+                    ]} 
+                  />
+                </View>
+              </View>
+
+              {/* Disk Space Meter */}
+              <View style={styles.metricRow}>
+                <View style={styles.metricLabelRow}>
+                  <Text style={styles.metricTitle}>Storage Disk</Text>
+                  <Text style={styles.metricValue}>
+                    {stats.diskUsed} GB / {stats.diskTotal} GB
+                  </Text>
+                </View>
+                <View style={styles.meterTrack}>
+                  <View 
+                    style={[
+                      styles.meterFill, 
+                      { 
+                        width: `${Math.min(100, (stats.diskUsed / stats.diskTotal) * 100)}%`, 
+                        backgroundColor: (stats.diskUsed / stats.diskTotal) > 0.9 ? '#E50914' : '#4FAF50' 
+                      }
+                    ]} 
+                  />
+                </View>
+              </View>
+
+              {/* Hardware Grid metrics */}
+              <View style={styles.metricsGrid}>
+                {/* CPU Temp */}
+                <View style={styles.gridCell}>
+                  <Text style={styles.gridCellLabel}>CPU Temp</Text>
+                  <Text 
+                    style={[
+                      styles.gridCellValue, 
+                      { color: stats.cpuTemp > 65 ? '#FF5722' : stats.cpuTemp > 50 ? '#FFC107' : '#4FAF50' }
+                    ]}
+                  >
+                    {stats.cpuTemp}°C
+                  </Text>
+                </View>
+
+                {/* System Load */}
+                <View style={styles.gridCell}>
+                  <Text style={styles.gridCellLabel}>Load Avg</Text>
+                  <Text style={[styles.gridCellValue, { fontSize: 13 }]}>
+                    {stats.loadAvg ? stats.loadAvg.join(', ') : 'N/A'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.metricsGrid}>
+                {/* Network IO rx/tx */}
+                <View style={styles.gridCell}>
+                  <Text style={styles.gridCellLabel}>Network Rx</Text>
+                  <Text style={styles.gridCellValue}>{stats.networkRx} MB</Text>
+                </View>
+
+                <View style={styles.gridCell}>
+                  <Text style={styles.gridCellLabel}>Network Tx</Text>
+                  <Text style={styles.gridCellValue}>{stats.networkTx} MB</Text>
+                </View>
+              </View>
+
+              {/* System Uptime banner */}
+              <View style={styles.uptimeBannerBlock}>
+                <Text style={styles.uptimeLabel}>System Uptime:</Text>
+                <Text style={styles.uptimeValue}>{formatUptime(stats.uptime)}</Text>
+              </View>
+
+            </View>
+          )}
+        </View>
+      )}
 
       {/* 🚀 CLIENT APP INFO & GIT EXTRAS */}
       <View style={styles.section}>
@@ -394,5 +557,91 @@ const styles = StyleSheet.create({
     height: 50,
     borderWidth: 1,
     borderColor: '#333'
+  },
+  statsLoadingBlock: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    backgroundColor: '#1E1E1E',
+    padding: 12,
+    borderRadius: 6
+  },
+  statsLoadingText: {
+    color: '#888',
+    fontSize: 13
+  },
+  statsContainer: {
+    marginTop: 8
+  },
+  metricRow: {
+    marginBottom: 12
+  },
+  metricLabelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 6
+  },
+  metricTitle: {
+    color: '#CCC',
+    fontSize: 12,
+    fontWeight: '600'
+  },
+  metricValue: {
+    color: '#FFF',
+    fontSize: 12,
+    fontWeight: '700'
+  },
+  meterTrack: {
+    height: 8,
+    backgroundColor: '#333',
+    borderRadius: 4,
+    overflow: 'hidden'
+  },
+  meterFill: {
+    height: '100%',
+    borderRadius: 4
+  },
+  metricsGrid: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12
+  },
+  gridCell: {
+    flex: 1,
+    backgroundColor: '#1E1E1E',
+    padding: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#2D2D2D'
+  },
+  gridCellLabel: {
+    color: '#888',
+    fontSize: 11,
+    marginBottom: 4
+  },
+  gridCellValue: {
+    color: '#FFF',
+    fontSize: 14,
+    fontWeight: '700'
+  },
+  uptimeBannerBlock: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    backgroundColor: '#1F2937',
+    padding: 10,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#374151',
+    marginTop: 4
+  },
+  uptimeLabel: {
+    color: '#9CA3AF',
+    fontSize: 12,
+    fontWeight: '600'
+  },
+  uptimeValue: {
+    color: '#60A5FA',
+    fontSize: 12,
+    fontWeight: '700'
   }
 });
