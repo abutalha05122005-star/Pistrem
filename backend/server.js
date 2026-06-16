@@ -375,13 +375,27 @@ app.get('/api/status', (req, res) => {
   });
 });
 
-// Startup Server
-app.listen(PORT, '0.0.0.0', () => {
-  console.log(`\n🛸 ========================================================`);
-  console.log(`🌐 PiStream Torrent Server actively listening on port: ${PORT}`);
-  console.log(`📂 Temp Buffer Path: ${TEMP_DIR}`);
-  console.log(`🛸 ========================================================\n`);
+// Startup Server dynamically checking for ports starting from PORT
+let currentPort = parseInt(PORT, 10);
+const startServer = (port) => {
+  const server = app.listen(port, '0.0.0.0', () => {
+    console.log(`\n🛸 ========================================================`);
+    console.log(`🌐 PiStream Torrent Server actively listening on port: ${port}`);
+    console.log(`📂 Temp Buffer Path: ${TEMP_DIR}`);
+    console.log(`🛸 ========================================================\n`);
 
-  // Start the storage checks and SQLite stream expiration queues
-  startCacheService();
-});
+    // Start the storage checks and SQLite stream expiration queues
+    startCacheService();
+  });
+
+  server.on('error', (err) => {
+    if (err.code === 'EADDRINUSE') {
+      console.warn(`⚠️ Port ${port} is occupied. Retrying with next fallback port: ${port + 1}...`);
+      startServer(port + 1);
+    } else {
+      console.error('❌ Server startup error:', err.message);
+    }
+  });
+};
+
+startServer(currentPort);

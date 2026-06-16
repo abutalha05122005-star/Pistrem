@@ -55,7 +55,7 @@ function setupDatabase() {
           type TEXT,
           position REAL NOT NULL,
           duration REAL NOT NULL,
-          lastUpdated INTEGERField
+          lastUpdated INTEGER
         )
       `, (err) => {
         // Safe check in case sqlite syntax gets complex or in case we need to alter schemas
