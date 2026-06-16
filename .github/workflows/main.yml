@@ -4,7 +4,7 @@ on:
   push:
     branches:
       - main
-  workflow_dispatch: # Allows you to manually click "Run workflow" if needed
+  workflow_dispatch:
 
 jobs:
   build:
@@ -25,19 +25,30 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Auto-Detect Framework & Install Dependencies
+      - name: Install Dependencies & Auto-Generate Android Folder
         run: |
           PKG_JSON=$(find . -name package.json -not -path "*/node_modules/*" -not -path "*/.git/*" | head -n 1)
           if [ ! -z "$PKG_JSON" ]; then
-            echo "=== React Native Project Detected ==="
             DIR=$(dirname "$PKG_JSON")
             cd "$DIR"
+            echo "Installing npm dependencies..."
             npm install --legacy-peer-deps || npm install
-          else
-            echo "=== Native Android Project Detected (No package.json found) ==="
+            
+            # Check if gradlew is missing
+            GRADLEW_PATH=$(find . -name gradlew -not -path "*/node_modules/*" -not -path "*/.git/*" | head -n 1)
+            if [ -z "$GRADLEW_PATH" ]; then
+              echo "--> gradlew missing! Checking if this is an Expo project..."
+              if grep -q '"expo"' package.json; then
+                echo "Expo detected! Dynamically generating android build directory..."
+                npx expo prebuild --platform android --no-install
+              else
+                echo "Standard React Native detected. Generating missing android wrappers..."
+                npx react-native ctx android || true
+              fi
+            fi
           fi
 
-      - name: Auto-Detect Gradle & Build APK
+      - name: Build Android APK
         run: |
           GRADLEW_PATH=$(find . -name gradlew -not -path "*/node_modules/*" -not -path "*/.git/*" | head -n 1)
           if [ ! -z "$GRADLEW_PATH" ]; then
@@ -47,7 +58,7 @@ jobs:
             cd "$DIR"
             ./gradlew assembleDebug
           else
-            echo "::error::Could not find 'gradlew' wrapper anywhere in the repository. Ensure your project structure is fully committed."
+            echo "::error::Could not find or auto-generate the Android wrapper files. Please ensure your project source code is fully committed."
             exit 1
           fi
 
