@@ -5,7 +5,7 @@
  */
 
 import fetch from 'node-fetch';
-import cheerio from 'cheerio';
+import * as cheerio from 'cheerio';
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY || '';
 

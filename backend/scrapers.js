@@ -5,7 +5,7 @@
  */
 
 import fetch from 'node-fetch';
-import cheerio from 'cheerio';
+import * as cheerio from 'cheerio';
 
 // Elegant User Agent Rotations
 const USER_AGENTS = [

@@ -45,12 +45,7 @@ app.use(bodyParser.json());
 
 // Root endpoint returning server status
 app.get('/', (req, res) => {
-  res.json({
-    status: 'online',
-    message: 'PiStream Torrent Delivery Engine actively running',
-    version: '1.0.0',
-    uptimeSeconds: Math.floor(process.uptime())
-  });
+  res.send('PiStream Server is Running!');
 });
 
 // Establish Redis Connection if URI configured
