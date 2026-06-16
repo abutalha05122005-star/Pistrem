@@ -92,17 +92,18 @@ export default function App() {
         
         let attempts = 0;
         let discoveredUrl = null;
+        const startTime = Date.now();
 
-        while (attempts < 3 && !discoveredUrl) {
+        while ((Date.now() - startTime) < 10000 && !discoveredUrl) {
           attempts++;
-          setDiscoveryLog(`Network Scan Pass ${attempts}/3...`);
+          setDiscoveryLog(`Network Scan Pass ${attempts}...`);
           
           try {
             const { autoDiscoverServer } = require('./src/config.js');
             discoveredUrl = await autoDiscoverServer((msg) => setDiscoveryLog(msg));
           } catch(e) {}
           
-          if (!discoveredUrl && attempts < 3) {
+          if (!discoveredUrl && (Date.now() - startTime) < 10000) {
             setDiscoveryLog(`Retrying scan...`);
             await new Promise(resolve => setTimeout(resolve, 1000));
           }
@@ -258,20 +259,35 @@ export default function App() {
           <AlertTriangle color="#E50914" size={64} style={{ marginBottom: 20 }} />
           <Text style={styles.overlayTitle}>Server Not Found</Text>
           <Text style={styles.overlayLog}>
-            Could not locate your PiStream server on '192.168.68.102' or any local subnet.
+            We searched your local network for 10 seconds but couldn't locate the PiStream server. You can try again or enter the address manually.
           </Text>
+
+          <TextInput
+            style={styles.manualInput}
+            placeholder="http://192.168.x.x:3000"
+            placeholderTextColor="#666"
+            value={currentBackendUrl}
+            onChangeText={setCurrentBackendUrl}
+            autoCapitalize="none"
+            autoCorrect={false}
+          />
+          
           <TouchableOpacity 
-            style={styles.retryOverlayBtn}
-            onPress={() => refreshServerState(true)}
+            style={[styles.retryOverlayBtn, { marginBottom: 15 }]}
+            onPress={async () => {
+              const { saveBackendUrl } = require('./src/config.js');
+              await saveBackendUrl(currentBackendUrl);
+              refreshServerState(false);
+            }}
           >
-            <Text style={styles.retryOverlayBtnText}>Retry Network Scan</Text>
+            <Text style={styles.retryOverlayBtnText}>Connect manually</Text>
           </TouchableOpacity>
 
           <TouchableOpacity 
-            style={[styles.retryOverlayBtn, { backgroundColor: '#333', marginTop: 10, borderColor: '#444' }]}
-            onPress={() => setShowSettings(true)}
+            style={[styles.retryOverlayBtn, { backgroundColor: '#333', borderColor: '#444' }]}
+            onPress={() => refreshServerState(true)}
           >
-            <Text style={styles.retryOverlayBtnText}>Open Diagnostic Settings</Text>
+            <Text style={styles.retryOverlayBtnText}>Retry Auto-Discovery</Text>
           </TouchableOpacity>
         </View>
       )}
@@ -917,5 +933,17 @@ const styles = StyleSheet.create({
     color: '#FFF',
     fontSize: 16,
     fontWeight: '700'
+  },
+  manualInput: {
+    backgroundColor: '#202020',
+    borderRadius: 8,
+    color: '#FFF',
+    width: '100%',
+    padding: 14,
+    fontSize: 16,
+    borderWidth: 1,
+    borderColor: '#444',
+    marginBottom: 20,
+    textAlign: 'center'
   }
 });

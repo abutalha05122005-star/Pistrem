@@ -194,9 +194,15 @@ export default function SettingsScreen({ onClose }) {
       {/* 🔮 SERVER PATH DISPLAY */}
       <View style={styles.section}>
         <Text style={styles.sectionLabel}>PiStream Server Configured</Text>
-        <Text style={styles.inputReadOnly}>
-          {urlInput || 'Not Configured'}
-        </Text>
+        <TextInput
+          style={styles.input}
+          placeholder="http://192.168.x.x:3000"
+          placeholderTextColor="#666"
+          value={urlInput}
+          onChangeText={setUrlInput}
+          autoCapitalize="none"
+          autoCorrect={false}
+        />
         
         {/* Connection test HUD */}
         <View style={styles.statusHud}>
@@ -221,11 +227,19 @@ export default function SettingsScreen({ onClose }) {
 
         <View style={styles.buttonRow}>
           <TouchableOpacity 
-            style={[styles.button, styles.secondaryButton, { flex: 1 }]} 
+            style={[styles.button, styles.secondaryButton, { flex: 1.2 }]} 
+            onPress={handleSaveSettings}
+            disabled={isTesting}
+          >
+            <Text style={styles.buttonText}>Save Changes</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.button, styles.primaryButton, { flex: 1 }]} 
             onPress={() => verifyConnection(urlInput)}
             disabled={isTesting}
           >
-            <Text style={styles.buttonText}>Check Connection Ping</Text>
+            <Text style={styles.buttonText}>Ping</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -467,11 +481,11 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 16
   },
-  inputReadOnly: {
+  input: {
     backgroundColor: '#202020',
     borderRadius: 6,
     color: '#FFFF',
-    paddingVertical: 14,
+    height: 48,
     paddingHorizontal: 16,
     fontSize: 14,
     borderWidth: 1,
