@@ -25,7 +25,7 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Install Dependencies & Mock Missing Assets
+      - name: Install Dependencies & Sanitize Config
         run: |
           PKG_JSON=$(find . -name package.json -not -path "*/node_modules/*" -not -path "*/.git/*" | head -n 1)
           if [ -z "$PKG_JSON" ]; then
@@ -39,26 +39,42 @@ jobs:
           echo "Installing project dependencies..."
           npm install --legacy-peer-deps || npm install
           
-          # Create a dummy assets folder and placeholder PNGs if they are missing
-          mkdir -p assets
-          if [ ! -f "assets/icon.png" ]; then
-            echo "--> Creating placeholder app icon..."
-            echo "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5CYII=" | base64 -d > assets/icon.png
-          fi
-          if [ ! -f "assets/adaptive-icon.png" ]; then
-            cp assets/icon.png assets/adaptive-icon.png
-          fi
-          if [ ! -f "assets/splash.png" ]; then
-            cp assets/icon.png assets/splash.png
-          fi
+          # Safe Node inline utility to strip custom asset requirements
+          node -e "
+          const fs = require('fs');
+          const file = './app.json';
+          if (fs.existsSync(file)) {
+            try {
+              let json = JSON.parse(fs.readFileSync(file, 'utf8'));
+              if (json.expo) {
+                delete json.expo.icon;
+                delete json.expo.splash;
+                if (json.expo.android) {
+                  delete json.expo.android.adaptiveIcon;
+                }
+                fs.writeFileSync(file, JSON.stringify(json, null, 2));
+                console.log('Successfully neutralized custom asset fields.');
+              }
+            } catch (e) {
+              console.log('Skipping modification due to read error:', e);
+            }
+          } else {
+            fs.writeFileSync(file, JSON.stringify({
+              expo: {
+                name: 'App',
+                slug: 'app-project',
+                version: '1.0.0',
+                android: { package: 'com.custom.myapp' }
+              }
+            }, null, 2));
+            console.log('Created baseline app.json wrapper.');
+          }
+          "
 
-          # Generate the native Android project folder dynamically
+          # Generate clean native Android files without asset conflicts
           GRADLEW_PATH=$(find . -name gradlew -not -path "*/node_modules/*" -not -path "*/.git/*" | head -n 1)
           if [ -z "$GRADLEW_PATH" ]; then
-            echo "--> Generating native android build directory..."
-            if [ ! -f "app.json" ]; then
-              echo '{"expo": {"name": "App", "slug": "app-project", "version": "1.0.0", "android": {"package": "com.custom.myapp"}}}' > app.json
-            fi
+            echo "--> Compiling missing Android system directories..."
             npx expo prebuild --platform android --no-install --clean
           fi
 
@@ -71,7 +87,7 @@ jobs:
             cd "$DIR"
             ./gradlew assembleDebug -x lint
           else
-            echo "::error::Failed to find or generate the Android build system."
+            echo "::error::Failed to establish the Android gradle build engine."
             exit 1
           fi
 
@@ -80,7 +96,7 @@ jobs:
           mkdir -p apk-output
           find . -name "*.apk" -not -path "*/node_modules/*" -exec cp {} apk-output/ \;
           if [ -z "$(ls -A apk-output)" ]; then
-            echo "::error::No APK files were generated!"
+            echo "::error::No APK files were found following build context execution!"
             exit 1
           fi
 
