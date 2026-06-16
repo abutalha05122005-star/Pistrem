@@ -46,10 +46,19 @@ export async function autoDiscoverServer(onProgress) {
           const url = `http://${ip}:${port}`;
           try {
             const controller = new AbortController();
-            const timeout = setTimeout(() => controller.abort(), 400);
+            const timeoutId = setTimeout(() => controller.abort(), 2000);
             
-            const res = await fetch(`${url}/api/discover`, { signal: controller.signal });
-            clearTimeout(timeout);
+            const fetchPromise = fetch(`${url}/api/discover`, {
+              signal: controller.signal,
+              headers: { 'Accept': 'application/json' }
+            });
+            
+            const timeoutPromise = new Promise((_, reject) => 
+              setTimeout(() => reject(new Error('timeout')), 2000)
+            );
+            
+            const res = await Promise.race([fetchPromise, timeoutPromise]);
+            clearTimeout(timeoutId);
             
             const data = await res.json();
             if (data && data.service === 'pistream') {

@@ -4,15 +4,17 @@ import { getBackendUrl } from '../config.js';
  * Enhanced fetch with built-in retry mechanism and dynamic URL resolution
  */
 async function fetchWithRetry(endpoint, options = {}, retries = 3, delayMs = 1000) {
-  const backendUrl = await getBackendUrl();
+  let backendUrl = await getBackendUrl();
+  if (backendUrl.endsWith('/')) backendUrl = backendUrl.slice(0, -1);
   const url = endpoint.startsWith('http') ? endpoint : `${backendUrl}${endpoint}`;
   
   for (let attempt = 1; attempt <= retries; attempt++) {
     try {
       const controller = new AbortController();
-      const id = setTimeout(() => controller.abort(), options.timeout || 10000); // 10s default timeout
+      const timeoutMs = options.timeout || 10000;
+      const timeoutId = setTimeout(() => controller.abort(), timeoutMs); 
       
-      const response = await fetch(url, {
+      const fetchPromise = fetch(url, {
         ...options,
         signal: controller.signal,
         headers: {
@@ -21,7 +23,12 @@ async function fetchWithRetry(endpoint, options = {}, retries = 3, delayMs = 100
         }
       });
       
-      clearTimeout(id);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('timeout')), timeoutMs)
+      );
+      
+      const response = await Promise.race([fetchPromise, timeoutPromise]);
+      clearTimeout(timeoutId);
       
       if (!response.ok) {
         throw new Error(`Server returned HTTP status ${response.status}`);
@@ -43,16 +50,27 @@ async function fetchWithRetry(endpoint, options = {}, retries = 3, delayMs = 100
  * Checks if the current backend server is reachable and active.
  */
 export async function testConnection(customUrl = null) {
-  const base = customUrl || (await getBackendUrl());
+  let base = customUrl || (await getBackendUrl());
+  if (base.endsWith('/')) base = base.slice(0, -1);
   try {
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 3500); // 3.5s timeout for health checks
+    const timeoutId = setTimeout(() => controller.abort(), 3500); // 3.5s timeout for health checks
     
-    const res = await fetch(`${base}/`, { signal: controller.signal });
-    clearTimeout(timeout);
+    const fetchPromise = fetch(`${base}/api/health`, {
+      signal: controller.signal,
+      headers: { 'Accept': 'application/json' }
+    });
     
-    const text = await res.text();
-    return text.includes('PiStream Server is Running!');
+    const timeoutPromise = new Promise((_, reject) => 
+      setTimeout(() => reject(new Error('timeout')), 3500)
+    );
+    
+    const res = await Promise.race([fetchPromise, timeoutPromise]);
+    clearTimeout(timeoutId);
+    
+    if (!res.ok) return false;
+    const body = await res.json();
+    return body && body.status === 'ok';
   } catch (e) {
     return false;
   }

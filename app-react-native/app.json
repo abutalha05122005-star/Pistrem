@@ -28,6 +28,23 @@
       "package": "com.pistream.torrentclient",
       "usesCleartextTraffic": true
     },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "usesCleartextTraffic": true
+          },
+          "ios": {
+            "infoPlist": {
+              "NSAppTransportSecurity": {
+                "NSAllowsArbitraryLoads": true
+              }
+            }
+          }
+        }
+      ]
+    ],
     "web": {
       "favicon": "./assets/favicon.png"
     }
