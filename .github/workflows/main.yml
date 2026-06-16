@@ -1,147 +1,43 @@
-name: Advanced Android Production Compilation Engine
+name: Android CI Build
 
 on:
   push:
-    branches:
-      - main
-  workflow_dispatch:
-
-env:
-  NODE_ENV: production
-  GRADLE_OPTS: "-Dorg.gradle.jvmargs=-Xmx4g -Dorg.gradle.workers.max=2"
+    branches: [ "main", "master", "develop" ]
+  pull_request:
+    branches: [ "main", "master" ]
 
 jobs:
-  compile-and-assemble:
+  build:
+    name: Build Android APK
     runs-on: ubuntu-latest
 
     steps:
-      - name: 1. Clone Source Repository
-        uses: actions/checkout@v4
+    - name: Checkout Code Repo
+      uses: actions/checkout@v4
 
-      - name: 2. Initialize Node.js Environment
-        uses: actions/setup-node@v4
-        with:
-          node-version: '20'
+    - name: Set up JDK 17
+      uses: actions/setup-java@v4
+      with:
+        java-version: '17'
+        distribution: 'temurin'
+        cache: gradle
 
-      - name: 3. Provision Java Development Kit (JDK 17)
-        uses: actions/setup-java@v4
-        with:
-          distribution: 'zulu'
-          java-version: '17'
+    - name: Grant Execute Permission for Gradle Wrapper
+      run: |
+        if [ -f gradlew ]; then
+          chmod +x gradlew
+        else
+          echo "Gradle wrapper script not found at root, writing a local wrapper fallback"
+          gradle wrapper
+          chmod +x gradlew
+        fi
 
-      - name: 4. Intercept & Configure Workspace Paths
-        id: workspace-setup
-        run: |
-          TARGET_JSON=$(find . -name package.json -not -path "*/node_modules/*" -not -path "*/.git/*" | head -n 1)
-          if [ -z "$TARGET_JSON" ]; then
-            echo "::error::Fatal: package.json missing from workspace context structure."
-            exit 1
-          fi
-          TARGET_DIR=$(dirname "$TARGET_JSON")
-          echo "PROJECT_PATH=$TARGET_DIR" >> $GITHUB_ENV
-          echo "Resolved operating directory context at: $TARGET_DIR"
+    - name: Build Debug APK
+      run: ./gradlew assembleDebug --no-daemon
 
-      - name: 5. Supercharge Build Speeds (Cache Gradle Internals)
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties') }}
-          restore-keys: |
-            ${{ runner.os }}-gradle-
-
-      - name: 6. Build Dependency Tree & Synthesize Missing Infrastructure
-        run: |
-          cd ${{ env.PROJECT_PATH }}
-          
-          echo "Deploying missing production nodes..."
-          npm install --legacy-peer-deps || npm install
-          
-          echo "Executing programmatic binary asset synthesizer..."
-          node -e "
-          const fs = require('fs');
-          const path = require('path');
-          
-          // Ensure asset directory exists
-          if (!fs.existsSync('./assets')) fs.mkdirSync('./assets');
-          
-          // Generate a valid, non-corrupted 1x1 transparent PNG binary block
-          const minimalPngBuffer = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5CYII=', 'base64');
-          
-          const mandatoryAssets = ['icon.png', 'adaptive-icon.png', 'splash.png'];
-          mandatoryAssets.forEach(asset => {
-            const assetPath = path.join('./assets', asset);
-            if (!fs.existsSync(assetPath)) {
-              fs.writeFileSync(assetPath, minimalPngBuffer);
-              console.log('Synthesized placeholder asset target:', assetPath);
-            }
-          });
-          
-          // Enforce structure synchronization inside app.json
-          const appJsonPath = './app.json';
-          let appConfig = { expo: { name: 'Pistrem', slug: 'pistrem-app', version: '1.0.0', android: { package: 'com.pistream.torrentclient' } } };
-          
-          if (fs.existsSync(appJsonPath)) {
-            try {
-              appConfig = JSON.parse(fs.readFileSync(appJsonPath, 'utf8'));
-            } catch(e) {
-              console.log('Re-initializing malformed configuration file.');
-            }
-          }
-          
-          if (!appConfig.expo) appConfig.expo = {};
-          if (!appConfig.expo.android) appConfig.expo.android = {};
-          
-          // Re-map assets to our synthesized binary payloads
-          appConfig.expo.icon = './assets/icon.png';
-          appConfig.expo.splash = { image: './assets/splash.png', resizeMode: 'contain', backgroundColor: '#FFFFFF' };
-          appConfig.expo.android.adaptiveIcon = { foregroundImage: './assets/adaptive-icon.png', backgroundColor: '#FFFFFF' };
-          if (!appConfig.expo.android.package) appConfig.expo.android.package = 'com.pistream.torrentclient';
-          
-          fs.writeFileSync(appJsonPath, JSON.stringify(appConfig, null, 2));
-          console.log('App architecture verified and rewritten.');
-          "
-
-          # Evaluate if Android native directory needs to be compiled
-          if [ ! -d "android" ]; then
-            echo "Evolving platform scaffolds via Expo CLI..."
-            npx expo prebuild --platform android --no-install --clean
-          fi
-
-      - name: 7. Optimize and Assemble Final Android Binary (APK)
-        run: |
-          cd ${{ env.PROJECT_PATH }}
-          GRADLEW_FIND=$(find . -name gradlew -not -path "*/node_modules/*" -not -path "*/.git/*" | head -n 1)
-          
-          if [ ! -z "$GRADLEW_FIND" ]; then
-            GRADLE_DIR=$(dirname "$GRADLEW_FIND")
-            chmod +x "$GRADLEW_FIND"
-            cd "$GRADLE_DIR"
-            
-            echo "Injecting memory allocation limits into gradle.properties..."
-            echo -e "\norg.gradle.jvmargs=-Xmx4g -XX:MaxMetaspaceSize=512m\norg.gradle.parallel=true\norg.gradle.caching=true" >> gradle.properties
-            
-            echo "Triggering optimized Gradle compiler..."
-            ./gradlew assembleDebug --no-daemon --parallel --build-cache -x lint -x test
-          else
-            echo "::error::Execution terminated: System failed to discover an active Gradle wrapper engine."
-            exit 1
-          fi
-
-      - name: 8. Harvest Output Artifacts
-        run: |
-          mkdir -p final-apk-package
-          find . -name "*.apk" -not -path "*/node_modules/*" -exec cp {} final-apk-package/ \;
-          if [ -z "$(ls -A final-apk-package)" ]; then
-            echo "::error::Compilation succeeded but zero payload binaries were discovered."
-            exit 1
-          fi
-
-      - name: 9. Streamline and Deploy Artifact Drop to GitHub UI
-        uses: actions/upload-artifact@v4
-        with:
-          name: Pistrem-Production-Build
-          path: final-apk-package/
-          retention-days: 7
-          
+    - name: Upload Compiled APK Artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: PiStream-app-debug
+        path: app/build/outputs/apk/debug/app-debug.apk
+        retention-days: 7
