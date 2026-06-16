@@ -38,6 +38,33 @@ export default function SettingsScreen({ onClose }) {
   const [isCheckingUpdate, setIsCheckingUpdate] = useState(false);
   const [updateInfo, setUpdateInfo] = useState(null);
 
+  // Compute server health metrics summary based on CPU, RAM, and temperature thresholds
+  const health = stats ? (() => {
+    const cpu = stats.cpuUsage || 0;
+    const ramRatio = stats.memoryTotal > 0 ? (stats.memoryUsed / stats.memoryTotal) : 0;
+    const temp = stats.cpuTemp || 0;
+
+    if (cpu >= 90 || ramRatio >= 0.95 || temp >= 80) {
+      return {
+        label: 'CRITICAL',
+        color: '#E50914',
+        desc: 'Server is under extreme stress. Thermal throttling or memory exhaustion imminent.'
+      };
+    }
+    if (cpu >= 75 || ramRatio >= 0.85 || temp >= 72) {
+      return {
+        label: 'WARNING',
+        color: '#FF9800',
+        desc: 'Elevated resource load detected. Consider closing active streams.'
+      };
+    }
+    return {
+      label: 'HEALTHY',
+      color: '#4FAF50',
+      desc: 'All systems operational. CPU temperature and resource levels are optimal.'
+    };
+  })() : { label: 'Unknown', color: '#888', desc: 'Awaiting telemetry metrics...' };
+
   useEffect(() => {
     let intervalId;
     
@@ -254,6 +281,17 @@ export default function SettingsScreen({ onClose }) {
             </View>
           ) : (
             <View style={styles.statsContainer}>
+              {/* 🏥 Overall Server Health Summary Section */}
+              <View style={[styles.healthSummaryCard, { borderColor: health.color }]}>
+                <View style={styles.healthSummaryHeader}>
+                  <Text style={styles.healthSummaryLabel}>System Health:</Text>
+                  <Text style={[styles.healthSummaryBadge, { color: health.color }]}>
+                    ● {health.label}
+                  </Text>
+                </View>
+                <Text style={styles.healthSummaryDesc}>{health.desc}</Text>
+              </View>
+
               {/* CPU Usage Meter */}
               <View style={styles.metricRow}>
                 <View style={styles.metricLabelRow}>
@@ -572,6 +610,34 @@ const styles = StyleSheet.create({
   },
   statsContainer: {
     marginTop: 8
+  },
+  healthSummaryCard: {
+    backgroundColor: '#1C1C1E',
+    borderRadius: 8,
+    borderWidth: 1.5,
+    padding: 12,
+    marginBottom: 16
+  },
+  healthSummaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6
+  },
+  healthSummaryLabel: {
+    color: '#E5E5EA',
+    fontSize: 13,
+    fontWeight: '700'
+  },
+  healthSummaryBadge: {
+    fontSize: 13,
+    fontWeight: '800',
+    letterSpacing: 0.5
+  },
+  healthSummaryDesc: {
+    color: '#AEAEB2',
+    fontSize: 12,
+    lineHeight: 16
   },
   metricRow: {
     marginBottom: 12
