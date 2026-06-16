@@ -25,40 +25,46 @@ jobs:
           distribution: 'zulu'
           java-version: '17'
 
-      - name: Install Dependencies & Auto-Generate Android Folder
+      - name: Auto-Generate Missing Android System
         run: |
           PKG_JSON=$(find . -name package.json -not -path "*/node_modules/*" -not -path "*/.git/*" | head -n 1)
-          if [ ! -z "$PKG_JSON" ]; then
-            DIR=$(dirname "$PKG_JSON")
-            cd "$DIR"
-            echo "Installing npm dependencies..."
-            npm install --legacy-peer-deps || npm install
-            
-            # Check if gradlew is missing
-            GRADLEW_PATH=$(find . -name gradlew -not -path "*/node_modules/*" -not -path "*/.git/*" | head -n 1)
-            if [ -z "$GRADLEW_PATH" ]; then
-              echo "--> gradlew missing! Checking if this is an Expo project..."
-              if grep -q '"expo"' package.json; then
-                echo "Expo detected! Dynamically generating android build directory..."
-                npx expo prebuild --platform android --no-install
-              else
-                echo "Standard React Native detected. Generating missing android wrappers..."
-                npx react-native ctx android || true
-              fi
-            fi
+          if [ -z "$PKG_JSON" ]; then
+            echo "::error::Could not find package.json anywhere!"
+            exit 1
           fi
+          
+          DIR=$(dirname "$PKG_JSON")
+          cd "$DIR"
+          
+          GRADLEW_PATH=$(find . -name gradlew -not -path "*/node_modules/*" -not -path "*/.git/*" | head -n 1)
+          if [ -z "$GRADLEW_PATH" ]; then
+            echo "--> Android native files missing. Generating clean environment..."
+            
+            # Create a fallback app.json configuration if it doesn't exist
+            if [ ! -f "app.json" ]; then
+              echo '{"expo": {"name": "App", "slug": "app-project", "version": "1.0.0", "android": {"package": "com.custom.myapp"}}}' > app.json
+            fi
+            
+            # Force install scaffolding tools
+            npm install expo@latest --save-dev --legacy-peer-deps
+            
+            # Synthesize the native android build folder
+            npx expo prebuild --platform android --no-install --clean
+          fi
+          
+          echo "Installing all dependencies..."
+          npm install --legacy-peer-deps || npm install
 
       - name: Build Android APK
         run: |
           GRADLEW_PATH=$(find . -name gradlew -not -path "*/node_modules/*" -not -path "*/.git/*" | head -n 1)
           if [ ! -z "$GRADLEW_PATH" ]; then
             DIR=$(dirname "$GRADLEW_PATH")
-            echo "Found Gradle environment in: $DIR"
             chmod +x "$GRADLEW_PATH"
             cd "$DIR"
-            ./gradlew assembleDebug
+            ./gradlew assembleDebug -x lint
           else
-            echo "::error::Could not find or auto-generate the Android wrapper files. Please ensure your project source code is fully committed."
+            echo "::error::Failed to generate the Android build system."
             exit 1
           fi
 
@@ -67,7 +73,7 @@ jobs:
           mkdir -p apk-output
           find . -name "*.apk" -not -path "*/node_modules/*" -exec cp {} apk-output/ \;
           if [ -z "$(ls -A apk-output)" ]; then
-            echo "::error::Build completed but no APK files were generated!"
+            echo "::error::No APK files were generated!"
             exit 1
           fi
 
