@@ -5,19 +5,27 @@
  * (duration * 2) SQLite automated storage timer enforcements.
  */
 
-import WebTorrent from 'webtorrent';
 import ffmpeg from 'fluent-ffmpeg';
 import fs from 'fs';
 import path from 'path';
 import crypto from 'crypto';
 import { StreamTimers } from './db.js';
 
-const client = new WebTorrent({
-  maxConns: 30, // Limited for Raspberry Pi CPU / Memory shields
-  tracker: true,
-  dht: true,
-  webSeeds: true
-});
+let client = null;
+
+async function getClient() {
+  if (!client) {
+    console.log('⚡ Loading WebTorrent dynamically inside stream engine...');
+    const { default: WebTorrentClass } = await import('webtorrent');
+    client = new WebTorrentClass({
+      maxConns: 30, // Limited for Raspberry Pi CPU / Memory shields
+      tracker: true,
+      dht: true,
+      webSeeds: true
+    });
+  }
+  return client;
+}
 
 const activeStreams = {}; // { id: { torrent, files, lastActive, endsAt, tempPath } }
 const TEMP_DIR = process.env.TEMP_DIR || '/tmp/streamcache';
@@ -33,7 +41,8 @@ if (!fs.existsSync(TEMP_DIR)) {
  * @param {string} magnetUrl 
  * @returns {Promise<Object>} Stream profile
  */
-function startTorrentStream(magnetUrl) {
+async function startTorrentStream(magnetUrl) {
+  const torrentClient = await getClient();
   return new Promise((resolve, reject) => {
     // Generate a unique stream session ID
     const streamId = crypto.createHash('md5').update(magnetUrl).digest('hex');
@@ -65,7 +74,7 @@ function startTorrentStream(magnetUrl) {
       fs.mkdirSync(downloadPath, { recursive: true });
     }
 
-    client.add(magnetUrl, { path: downloadPath }, (torrent) => {
+    torrentClient.add(magnetUrl, { path: downloadPath }, (torrent) => {
       // Prioritize sequential download pieces for streaming optimization
       torrent.select(0, torrent.pieces.length - 1, 1);
       torrent.criticalSelection = [];
