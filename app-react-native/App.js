@@ -99,7 +99,7 @@ export default function App() {
           setDiscoveryLog(`Network Scan Pass ${attempts}...`);
           
           try {
-            const { autoDiscoverServer } = require('./src/config.js');
+            const { autoDiscoverServer } = require('./src/services/discovery.js');
             discoveredUrl = await autoDiscoverServer((msg) => setDiscoveryLog(msg));
           } catch(e) {}
           

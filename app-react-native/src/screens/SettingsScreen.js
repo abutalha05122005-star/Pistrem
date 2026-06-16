@@ -10,7 +10,8 @@ import {
   ScrollView,
   Platform
 } from 'react-native';
-import { getBackendUrl, saveBackendUrl, autoDiscoverServer } from '../config.js';
+import { getBackendUrl, saveBackendUrl } from '../config.js';
+import { autoDiscoverServer } from '../services/discovery.js';
 import { testConnection, getSystemStats } from '../services/api.js';
 import { checkForAppUpdates, performAppUpgrade, CLIENT_VERSION } from '../services/updateChecker.js';
 
