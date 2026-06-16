@@ -1,53 +1,65 @@
-name: Android CI Build
+# .github/workflows/main.yml
+name: Build & Release Mobile App
 
 on:
   push:
-    branches: [ "main", "master", "develop" ]
-  pull_request:
-    branches: [ "main", "master" ]
+    branches: [main]
+    paths:
+      - 'app/**'             # only run when app files change
+  workflow_dispatch:          # allow manual triggers
 
 jobs:
-  build:
-    name: Build Android APK
+  build-android:
     runs-on: ubuntu-latest
-
     steps:
-    - name: Checkout Code Repo
-      uses: actions/checkout@v4
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
-      with:
-        java-version: '17'
-        distribution: 'temurin'
-        cache: gradle
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: 'npm'
+          cache-dependency-path: app/package-lock.json
 
-    - name: Decode Debug Keystore
-      run: |
-        if [ -f debug.keystore.base64 ]; then
-          base64 -d debug.keystore.base64 > debug.keystore
-          echo "Debug keystore decoded successfully from base64"
-        else
-          echo "debug.keystore.base64 not found, creating a new debug keystore as fallback"
-          keytool -genkey -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Android Debug,O=Android,C=US"
-        fi
+      - name: Install dependencies
+        run: |
+          cd app
+          npm ci
 
-    - name: Grant Execute Permission for Gradle Wrapper
-      run: |
-        if [ -f gradlew ]; then
-          chmod +x gradlew
-        else
-          echo "Gradle wrapper script not found at root, writing a local wrapper fallback"
-          gradle wrapper
-          chmod +x gradlew
-        fi
+      - name: Setup Expo & EAS
+        uses: expo/expo-github-action@v8
+        with:
+          eas-version: latest
+          token: ${{ secrets.EXPO_TOKEN }}
 
-    - name: Build Debug APK
-      run: ./gradlew assembleDebug --no-daemon
+      - name: Build Android APK
+        run: |
+          cd app
+          eas build --platform android --profile preview --non-interactive --wait
+        env:
+          EXPO_TOKEN: ${{ secrets.EXPO_TOKEN }}
 
-    - name: Upload Compiled APK Artifact
-      uses: actions/upload-artifact@v4
-      with:
-        name: PiStream-app-debug
-        path: app/build/outputs/apk/debug/app-debug.apk
-        retention-days: 7
+      - name: Download APK from EAS
+        run: |
+          cd app
+          # Get the latest finished build's artifact URL
+          BUILD_URL=$(eas build:list --platform android --status finished --limit 1 --json | jq -r '.[0].artifacts.applicationArchiveUrl')
+          curl -L -o app-release.apk "$BUILD_URL"
+
+      - name: Get app version
+        id: version
+        run: |
+          VERSION=$(cd app && node -p "require('./app.json').expo.version")
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.VERSION }}
+          name: "Release v${{ steps.version.outputs.VERSION }}"
+          files: app/app-release.apk
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
