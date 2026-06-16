@@ -4,8 +4,8 @@
  * proxy rotators, and robots.txt-compliant pacing.
  */
 
-const fetch = require('node-fetch');
-const cheerio = require('cheerio');
+import fetch from 'node-fetch';
+import cheerio from 'cheerio';
 
 // Elegant User Agent Rotations
 const USER_AGENTS = [
@@ -828,6 +828,6 @@ async function searchAllTorrents(query, type = 'all') {
   return finalUniqueList;
 }
 
-module.exports = {
+export {
   searchAllTorrents
 };

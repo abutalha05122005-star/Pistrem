@@ -1,7 +1,7 @@
 /**
- * 🔒 PiStream Transparent Encryption Hook (Must be required before ANY file IO!)
+ * 🔒 PiStream Transparent Encryption Hook (Must be imported before ANY file IO!)
  */
-require('./encryptedFs');
+import './encryptedFs.js';
 
 /**
  * 🛰️ PiStream Torrent Streamer API Gateway
@@ -9,29 +9,31 @@ require('./encryptedFs');
  * customizable transcode streaming lines, seek previews, and continuous progress syncs.
  */
 
-require('dotenv').config();
-const express = require('express');
-const cors = require('cors');
-const bodyParser = require('body-parser');
-const http = require('http');
-const path = require('path');
-const fs = require('fs');
-const { createClient } = require('redis');
+import dotenv from 'dotenv';
+dotenv.config();
 
-const { searchAllTorrents } = require('./scrapers');
-const { 
+import express from 'express';
+import cors from 'cors';
+import bodyParser from 'body-parser';
+import http from 'http';
+import path from 'path';
+import fs from 'fs';
+import { createClient } from 'redis';
+
+import { searchAllTorrents } from './scrapers.js';
+import { 
   startTorrentStream, 
   serveByteRangeStream, 
   serveTransmuxedStream, 
   serveTranscodedQualityStream,
   cleanupStreamingSession,
   activeStreams 
-} = require('./streamEngine');
+} from './streamEngine.js';
 
-const { startCacheService, enforceCacheLimit, getCacheSize } = require('./cacheService');
-const { Watchlist, Progress, StreamTimers } = require('./db');
-const { fetchMetadata } = require('./metadata');
-const { generateThumbnailFrame, getPlaceholderThumbnail } = require('./thumbnailGenerator');
+import { startCacheService, enforceCacheLimit, getCacheSize } from './cacheService.js';
+import { Watchlist, Progress, StreamTimers } from './db.js';
+import { fetchMetadata } from './metadata.js';
+import { generateThumbnailFrame, getPlaceholderThumbnail } from './thumbnailGenerator.js';
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -40,6 +42,16 @@ let redisClient = null;
 
 app.use(cors());
 app.use(bodyParser.json());
+
+// Root endpoint returning server status
+app.get('/', (req, res) => {
+  res.json({
+    status: 'online',
+    message: 'PiStream Torrent Delivery Engine actively running',
+    version: '1.0.0',
+    uptimeSeconds: Math.floor(process.uptime())
+  });
+});
 
 // Establish Redis Connection if URI configured
 (async () => {

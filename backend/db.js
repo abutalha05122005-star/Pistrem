@@ -4,9 +4,15 @@
  * and live stream-cache timers for (duration * 2) auto-deletion schedules on the Raspberry Pi.
  */
 
-const sqlite3 = require('sqlite3').verbose();
-const path = require('path');
-const fs = require('fs');
+import sqlite3Init from 'sqlite3';
+import path from 'path';
+import fs from 'fs';
+import { fileURLToPath } from 'url';
+import { dirname } from 'path';
+
+const sqlite3 = sqlite3Init.verbose();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 const DB_PATH = path.join(__dirname, 'pistream.db');
 
@@ -210,7 +216,7 @@ const StreamTimers = {
   }
 };
 
-module.exports = {
+export {
   db,
   Watchlist,
   Progress,

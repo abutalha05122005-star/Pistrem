@@ -4,8 +4,8 @@
  * using TMDB API (v3) with fully detailed web-scraping fallbacks (IMDb/TheMovieDB).
  */
 
-const fetch = require('node-fetch');
-const cheerio = require('cheerio');
+import fetch from 'node-fetch';
+import cheerio from 'cheerio';
 
 const TMDB_API_KEY = process.env.TMDB_API_KEY || '';
 
@@ -170,7 +170,7 @@ function makeSyntheticMetadata(query, category) {
   };
 }
 
-module.exports = {
+export {
   fetchMetadata,
   scrapeImdbTitle
 };

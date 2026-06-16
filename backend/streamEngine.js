@@ -5,12 +5,12 @@
  * (duration * 2) SQLite automated storage timer enforcements.
  */
 
-const WebTorrent = require('webtorrent');
-const ffmpeg = require('fluent-ffmpeg');
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
-const { StreamTimers } = require('./db');
+import WebTorrent from 'webtorrent';
+import ffmpeg from 'fluent-ffmpeg';
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
+import { StreamTimers } from './db.js';
 
 const client = new WebTorrent({
   maxConns: 30, // Limited for Raspberry Pi CPU / Memory shields
@@ -412,7 +412,7 @@ function deleteFromDisk(folderPath) {
   }
 }
 
-module.exports = {
+export {
   startTorrentStream,
   serveByteRangeStream,
   serveTransmuxedStream,

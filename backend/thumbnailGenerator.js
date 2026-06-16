@@ -4,9 +4,9 @@
  * and caches them inside disk storage to avoid overloading the Raspberry Pi's processor.
  */
 
-const ffmpeg = require('fluent-ffmpeg');
-const fs = require('fs');
-const path = require('path');
+import ffmpeg from 'fluent-ffmpeg';
+import fs from 'fs';
+import path from 'path';
 
 /**
  * Extracts a 320x180 JPEG thumbnail frame at a specific timestamp
@@ -56,7 +56,7 @@ function getPlaceholderThumbnail() {
   return 'data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIzMjAiIGhlaWdodD0iMTgwIiB2aWV3Qm94PSIwIDAgMzIwIDE4MCI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iIzE4MTgxYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBmaWxsPSIjNTVVNTU1IiBmb250LXNpemU9IjE0IiBmb250LWZhbWlseT0ic2Fucy1zZXJpZiIgZHk9Ii4zZW0iIHRleHQtYW5jaG9yPSJtaWRkbGUiPkxvYWRpbmcgcHJldmlldy4uLjwvdGV4dD48L3N2Zz4=';
 }
 
-module.exports = {
+export {
   generateThumbnailFrame,
   getPlaceholderThumbnail
 };

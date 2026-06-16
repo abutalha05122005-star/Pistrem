@@ -5,9 +5,9 @@
  * Allows sequential download, random-access seek-and-read, and secure storage at rest.
  */
 
-const fs = require('fs');
-const path = require('path');
-const crypto = require('crypto');
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
 
 const TEMP_DIR = process.env.TEMP_DIR || '/tmp/streamcache';
 const ENCRYPTION_KEY = process.env.ENCRYPTION_KEY || 'SuperSecureStreamingEncryptionKey123';

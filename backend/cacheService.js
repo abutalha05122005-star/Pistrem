@@ -5,10 +5,11 @@
  * every minute to enforce (duration * 2) auto-deletion schedules on the Raspberry Pi.
  */
 
-const fs = require('fs');
-const path = require('path');
-const { activeStreams, cleanupStreamingSession } = require('./streamEngine');
-const { StreamTimers } = require('./db');
+import fs from 'fs';
+import path from 'path';
+import crypto from 'crypto';
+import { activeStreams, cleanupStreamingSession } from './streamEngine.js';
+import { StreamTimers } from './db.js';
 
 const TEMP_DIR = process.env.TEMP_DIR || '/tmp/streamcache';
 // 5 GB Limit, fall back to environment variable if configured (default to 5GB in bytes)
@@ -73,7 +74,6 @@ function deleteFolderRecursive(folderPath) {
             const fd = fs.openSync(curPath, 'r+');
             const size = fs.statSync(curPath).size;
             if (size > 0) {
-              const crypto = require('crypto');
               const buffer = crypto.randomBytes(Math.min(size, 4096));
               fs.writeSync(fd, buffer, 0, buffer.length, 0);
             }
@@ -226,23 +226,25 @@ function startCacheService() {
   }, TIMER_INTERVAL_MS);
 }
 
-module.exports = {
-  startCacheService,
-  enforceCacheLimit,
-  getCacheSize: () => {
-    let totalSize = 0;
-    try {
-      if (fs.existsSync(TEMP_DIR)) {
-        const items = fs.readdirSync(TEMP_DIR);
-        for (const item of items) {
-          const itemPath = path.join(TEMP_DIR, item);
-          const stat = fs.statSync(itemPath);
-          if (stat.isDirectory()) {
-            totalSize += getDirectoryStats(itemPath).size;
-          }
+function getCacheSize() {
+  let totalSize = 0;
+  try {
+    if (fs.existsSync(TEMP_DIR)) {
+      const items = fs.readdirSync(TEMP_DIR);
+      for (const item of items) {
+        const itemPath = path.join(TEMP_DIR, item);
+        const stat = fs.statSync(itemPath);
+        if (stat.isDirectory()) {
+          totalSize += getDirectoryStats(itemPath).size;
         }
       }
-    } catch (e) {}
-    return totalSize;
-  }
+    }
+  } catch (e) {}
+  return totalSize;
+}
+
+export {
+  startCacheService,
+  enforceCacheLimit,
+  getCacheSize
 };
