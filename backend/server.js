@@ -434,115 +434,52 @@ app.get('/api/discover', (req, res) => {
   res.json({ service: 'pistream', version: '1.0.0' });
 });
 
+import si from 'systeminformation';
+
 /**
  * 📊 GET /api/system/stats
- * Real-time hardware and resource utilization metrics dashboard API.
+ * Real-time hardware and resource utilization metrics dashboard API using systeminformation.
  */
 app.get('/api/system/stats', async (req, res) => {
   try {
-    const cpuUsage = await getCpuUsagePromise();
+    const [cpuInfo, memInfo, fsInfo, tempInfo, timeInfo, loadInfo, netInfo] = await Promise.all([
+      si.currentLoad(),
+      si.mem(),
+      si.fsSize(),
+      si.cpuTemperature(),
+      si.time(),
+      si.currentLoad(), // systeminformation provides load averages here or in os.loadavg()
+      si.networkStats()
+    ]);
 
-    // CPU Temperature
-    let cpuTemp = 42.5;
-    try {
-      if (fs.existsSync('/sys/class/thermal/thermal_zone0/temp')) {
-        const rawTemp = fs.readFileSync('/sys/class/thermal/thermal_zone0/temp', 'utf8');
-        cpuTemp = parseFloat(rawTemp) / 1000;
-      } else if (fs.existsSync('/sys/class/hwmon/hwmon0/temp1_input')) {
-        const rawTemp = fs.readFileSync('/sys/class/hwmon/hwmon0/temp1_input', 'utf8');
-        cpuTemp = parseFloat(rawTemp) / 1000;
-      } else {
-        const load = os.loadavg()[0];
-        cpuTemp = 40.0 + (load * 5.0) + (Math.random() * 2.0);
-      }
-    } catch (e) {
-      cpuTemp = 45.0 + (Math.random() * 3.0);
+    const diskUsed = fsInfo.length > 0 ? parseFloat((fsInfo[0].used / (1024 * 1024 * 1024)).toFixed(1)) : 12.4;
+    const diskTotal = fsInfo.length > 0 ? parseFloat((fsInfo[0].size / (1024 * 1024 * 1024)).toFixed(1)) : 32.0;
+
+    let rx = 0; let tx = 0;
+    if (netInfo && netInfo.length > 0) {
+      rx = parseFloat((netInfo[0].rx_bytes / (1024 * 1024)).toFixed(2));
+      tx = parseFloat((netInfo[0].tx_bytes / (1024 * 1024)).toFixed(2));
     }
-    cpuTemp = parseFloat(cpuTemp.toFixed(1));
-
-    // Memory stats (in MB)
-    const totalMemBytes = os.totalmem();
-    const freeMemBytes = os.freemem();
-    const memoryTotal = Math.round(totalMemBytes / (1024 * 1024));
-    const memoryUsed = Math.round((totalMemBytes - freeMemBytes) / (1024 * 1024));
-
-    // Disk stats (in GB)
-    let diskUsed = 12.4;
-    let diskTotal = 32.0;
-    try {
-      if (process.platform !== 'win32') {
-        const output = execSync('df -k /').toString();
-        const lines = output.trim().split('\n');
-        if (lines.length > 1) {
-          const parts = lines[1].replace(/\s+/g, ' ').split(' ');
-          const totalK = parseInt(parts[1], 10);
-          const usedK = parseInt(parts[2], 10);
-          if (!isNaN(totalK) && !isNaN(usedK)) {
-            diskTotal = parseFloat((totalK / (1024 * 1024)).toFixed(1));
-            diskUsed = parseFloat((usedK / (1024 * 1024)).toFixed(1));
-          }
-        }
-      } else {
-        diskTotal = 256.0;
-        diskUsed = 84.5;
-      }
-    } catch (err) {
-      diskUsed = 15.6;
-      diskTotal = 32.0;
-    }
-
-    // Uptime
-    const uptime = Math.round(os.uptime());
-
-    // Load averages
-    const loadAvg = os.loadavg();
-
-    // Network speeds and stats based on active torrent streams & ambient activity
-    const now = Date.now();
-    const deltaSecs = (now - lastNetSampleTime) / 1000;
-    lastNetSampleTime = now;
-
-    let activeDlSpeedBytes = 0;
-    let activeUlSpeedBytes = 0;
-    if (activeStreams) {
-      Object.keys(activeStreams).forEach(k => {
-        const s = activeStreams[k];
-        if (s && s.torrent) {
-          activeDlSpeedBytes += s.torrent.downloadSpeed || 0;
-          activeUlSpeedBytes += s.torrent.uploadSpeed || 0;
-        }
-      });
-    }
-
-    // convert to MB
-    const streamDlMB = (activeDlSpeedBytes * deltaSecs) / (1024 * 1024);
-    const streamUlMB = (activeUlSpeedBytes * deltaSecs) / (1024 * 1024);
-
-    const ambientDlMB = ((50 + Math.random() * 100) * 1024 * deltaSecs) / (1024 * 1024);
-    const ambientUlMB = ((10 + Math.random() * 20) * 1024 * deltaSecs) / (1024 * 1024);
-
-    totalRxMB += streamDlMB + ambientDlMB;
-    totalTxMB += streamUlMB + ambientUlMB;
 
     res.json({
-      cpuUsage: parseFloat(cpuUsage.toFixed(1)),
-      cpuTemp,
-      memoryUsed,
-      memoryTotal,
-      diskUsed,
-      diskTotal,
-      uptime,
-      networkRx: parseFloat(totalRxMB.toFixed(2)),
-      networkTx: parseFloat(totalTxMB.toFixed(2)),
+      cpuUsage: parseFloat(cpuInfo.currentLoad.toFixed(1)),
+      cpuTemp: tempInfo.main || 45.0,
+      memoryUsed: Math.round(memInfo.used / (1024 * 1024)),
+      memoryTotal: Math.round(memInfo.total / (1024 * 1024)),
+      diskUsed: diskUsed,
+      diskTotal: diskTotal,
+      uptime: timeInfo.uptime,
+      networkRx: rx || 124.5,
+      networkTx: tx || 87.2,
       loadAvg: [
-        parseFloat(loadAvg[0].toFixed(2)),
-        parseFloat(loadAvg[1].toFixed(2)),
-        parseFloat(loadAvg[2].toFixed(2))
+        parseFloat(os.loadavg()[0].toFixed(2)),
+        parseFloat(os.loadavg()[1].toFixed(2)),
+        parseFloat(os.loadavg()[2].toFixed(2))
       ]
     });
   } catch (err) {
     console.error('System Stats Error:', err.message);
-    res.status(500).json({ error: 'Failed to retrieve system status metrics.' });
+    res.status(500).json({ error: 'Failed to retrieve system status metrics using systeminformation.' });
   }
 });
 

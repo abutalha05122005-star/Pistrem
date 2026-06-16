@@ -55,6 +55,11 @@ export default function App() {
   const [currentBackendUrl, setCurrentBackendUrl] = useState('');
   const [isServerOnline, setIsServerOnline] = useState(true);
   const [isCheckingConnection, setIsCheckingConnection] = useState(false);
+
+  // Auto-discovery state
+  const [isAutoDiscovering, setIsAutoDiscovering] = useState(true);
+  const [discoveryLog, setDiscoveryLog] = useState('Connecting to primary static IP...');
+  const [discoveryFailed, setDiscoveryFailed] = useState(false);
   
   // Versions
   const [updateAvailable, setUpdateAvailable] = useState(null);
@@ -62,15 +67,64 @@ export default function App() {
   const videoRef = useRef(null);
 
   // Load Settings and Check Connection Status on Start
-  const refreshServerState = async () => {
+  const refreshServerState = async (forceDiscover = false) => {
     setIsCheckingConnection(true);
+    setDiscoveryLog('Checking primary static IP (192.168.68.102)...');
+    
     try {
-      const url = await getBackendUrl();
-      setCurrentBackendUrl(url);
-      const online = await testConnection(url);
-      setIsServerOnline(online);
+      let url = forceDiscover ? null : await getBackendUrl();
+      let online = false;
+      
+      if (url) {
+        online = await testConnection(url);
+      }
+
+      if (online) {
+        setCurrentBackendUrl(url);
+        setIsServerOnline(true);
+        setIsAutoDiscovering(false);
+        setDiscoveryFailed(false);
+      } else {
+        // Automatically start discovery if primary fails or we force it
+        setIsAutoDiscovering(true);
+        setDiscoveryFailed(false);
+        setDiscoveryLog('Static IP unavailable. Searching local network...');
+        
+        let attempts = 0;
+        let discoveredUrl = null;
+
+        while (attempts < 3 && !discoveredUrl) {
+          attempts++;
+          setDiscoveryLog(`Network Scan Pass ${attempts}/3...`);
+          
+          try {
+            const { autoDiscoverServer } = require('./src/config.js');
+            discoveredUrl = await autoDiscoverServer((msg) => setDiscoveryLog(msg));
+          } catch(e) {}
+          
+          if (!discoveredUrl && attempts < 3) {
+            setDiscoveryLog(`Retrying scan...`);
+            await new Promise(resolve => setTimeout(resolve, 1000));
+          }
+        }
+        
+        if (discoveredUrl) {
+          const { saveBackendUrl } = require('./src/config.js');
+          await saveBackendUrl(discoveredUrl);
+          setCurrentBackendUrl(discoveredUrl);
+          setIsServerOnline(true);
+          setIsAutoDiscovering(false);
+          setDiscoveryFailed(false);
+        } else {
+          setIsServerOnline(false);
+          setIsAutoDiscovering(false);
+          setDiscoveryFailed(true);
+        }
+      }
     } catch (e) {
       setIsServerOnline(false);
+      setIsAutoDiscovering(false);
+      setDiscoveryFailed(true);
     } finally {
       setIsCheckingConnection(false);
     }
@@ -189,16 +243,47 @@ export default function App() {
   return (
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor="#0A0A0A" />
+
+      {/* 🚀 STARTUP DISCOVERY UI OVERLAYS */}
+      {isAutoDiscovering && (
+        <View style={styles.fullScreenOverlay}>
+          <ActivityIndicator size="large" color="#E50914" />
+          <Text style={styles.overlayTitle}>Searching for PiStream Server...</Text>
+          <Text style={styles.overlayLog}>{discoveryLog}</Text>
+        </View>
+      )}
+
+      {!isAutoDiscovering && discoveryFailed && !showSettings && (
+        <View style={styles.fullScreenOverlay}>
+          <AlertTriangle color="#E50914" size={64} style={{ marginBottom: 20 }} />
+          <Text style={styles.overlayTitle}>Server Not Found</Text>
+          <Text style={styles.overlayLog}>
+            Could not locate your PiStream server on '192.168.68.102' or any local subnet.
+          </Text>
+          <TouchableOpacity 
+            style={styles.retryOverlayBtn}
+            onPress={() => refreshServerState(true)}
+          >
+            <Text style={styles.retryOverlayBtnText}>Retry Network Scan</Text>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
+            style={[styles.retryOverlayBtn, { backgroundColor: '#333', marginTop: 10, borderColor: '#444' }]}
+            onPress={() => setShowSettings(true)}
+          >
+            <Text style={styles.retryOverlayBtnText}>Open Diagnostic Settings</Text>
+          </TouchableOpacity>
+        </View>
+      )}
       
       {/* ⚙️ SETTINGS VIEW POPUP */}
       {showSettings ? (
         <SettingsScreen 
           onClose={() => {
             setShowSettings(false);
-            refreshServerState();
           }} 
         />
-      ) : activeStreamUrl ? (
+      ) : activeStreamUrl && !isAutoDiscovering && !discoveryFailed ? (
         /* 🎬 FULL SCREEN PLAYER GATE */
         <View style={styles.fullscreenPlayerContainer}>
           <Video
@@ -263,7 +348,7 @@ export default function App() {
             </Text>
           </View>
         </View>
-      ) : (
+      ) : !isAutoDiscovering && !discoveryFailed ? (
         /* 🔍 MAIN SEARCH PAGE */
         <View style={{ flex: 1 }}>
           
@@ -446,7 +531,7 @@ export default function App() {
             />
           )}
         </View>
-      )}
+      ) : null}
     </SafeAreaView>
   );
 }
@@ -796,5 +881,41 @@ const styles = StyleSheet.create({
     color: '#999',
     fontSize: 11,
     fontWeight: '500'
+  },
+  fullScreenOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: '#0A0A0A',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 100,
+    paddingHorizontal: 40
+  },
+  overlayTitle: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+    marginTop: 20,
+    marginBottom: 10,
+    textAlign: 'center'
+  },
+  overlayLog: {
+    color: '#B3B3B3',
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginBottom: 30
+  },
+  retryOverlayBtn: {
+    backgroundColor: '#E50914',
+    paddingVertical: 14,
+    paddingHorizontal: 30,
+    borderRadius: 8,
+    width: '100%',
+    alignItems: 'center'
+  },
+  retryOverlayBtnText: {
+    color: '#FFF',
+    fontSize: 16,
+    fontWeight: '700'
   }
 });

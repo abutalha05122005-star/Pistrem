@@ -191,18 +191,12 @@ export default function SettingsScreen({ onClose }) {
     <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
       <Text style={styles.title}>System Settings</Text>
       
-      {/* 🔮 SERVER PATH INPUT */}
+      {/* 🔮 SERVER PATH DISPLAY */}
       <View style={styles.section}>
-        <Text style={styles.sectionLabel}>PiStream Server Base URL</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="http://192.168.1.100:3000"
-          placeholderTextColor="#666"
-          value={urlInput}
-          onChangeText={setUrlInput}
-          autoCapitalize="none"
-          autoCorrect={false}
-        />
+        <Text style={styles.sectionLabel}>PiStream Server Configured</Text>
+        <Text style={styles.inputReadOnly}>
+          {urlInput || 'Not Configured'}
+        </Text>
         
         {/* Connection test HUD */}
         <View style={styles.statusHud}>
@@ -231,15 +225,7 @@ export default function SettingsScreen({ onClose }) {
             onPress={() => verifyConnection(urlInput)}
             disabled={isTesting}
           >
-            <Text style={styles.buttonText}>Test Ping</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity 
-            style={[styles.button, styles.primaryButton, { flex: 1.2 }]} 
-            onPress={handleSaveSettings}
-            disabled={isTesting}
-          >
-            <Text style={styles.buttonText}>Save Changes</Text>
+            <Text style={styles.buttonText}>Check Connection Ping</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -481,11 +467,11 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     marginBottom: 16
   },
-  input: {
+  inputReadOnly: {
     backgroundColor: '#202020',
     borderRadius: 6,
     color: '#FFFF',
-    height: 48,
+    paddingVertical: 14,
     paddingHorizontal: 16,
     fontSize: 14,
     borderWidth: 1,
